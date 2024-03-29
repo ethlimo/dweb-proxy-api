@@ -1,0 +1,14 @@
+*.swp
+package-lock.json
+
+index
+node_modules
+#.envrc for local development environment variables
+.envrc
+
+#code coverage
+.nyc_output
+dist
+
+#arweave warpdb cache
+warpdb

@@ -1,0 +1,7 @@
+{
+  "extensions": ["ts"],
+  "spec": ["src/**/*.spec.*"],
+  "require": ["ts-node/register"],
+  "loader": "ts-node/esm",
+  "timeout": 2000
+}

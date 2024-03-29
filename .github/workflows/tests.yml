@@ -1,0 +1,25 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - '.mocharc.js'
+      - 'package.json'
+      - 'tsconfig.json'
+
+jobs:
+  run_tests:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        id: install
+        run: |
+          npm install
+      - name: Run Tests
+        id: test
+        run: |
+          npm run test

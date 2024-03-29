@@ -1,0 +1,68 @@
+[
+  {
+    "name": "blockranger.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    "additionalInfo": {}
+  },
+  {
+    "name": "fqdn-test-case.gov.kwenta.asdf.local",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    "additionalInfo": {}
+  },
+  {
+    "name": "fast-ipfs.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreiezce7grkp25677qjyq7awqkik6oa52ysxkzrg4lusmxqbx6vwfuq",
+    "additionalInfo": {}
+  },
+  {
+    "name": "surveychain.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreiargozwf26buneeblh3hubrzaqwh3eitmh6jnmqmvfaaudpf7sc6u",
+    "additionalInfo": {}
+  },
+  {
+    "name": "easy-rln.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreif64k6qvhagsw5gvhizokyzv6djoliizumgaepw4ahejgsqdz6q7i",
+    "additionalInfo": {}
+  },
+  {
+    "name": "view-code.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreicr2zuqnox2xnxuvtp7pzemzhqg3deaon6ltbe73446ljhfgfzlny",
+    "additionalInfo": {}
+  },
+  {
+    "name": "makesy.eth",
+    "type": "arweave",
+    "contentHash": "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+    "additionalInfo": {
+      "arweave": {
+        "result": "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        "query": "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        "subdomain_sandbox_id": "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a"
+      }
+    }
+  },
+  {
+    "name": "swarm.eth",
+    "type": "swarm",
+    "contentHash": "bzz://a8b1fb83c8542ee61623ed7b91208a4b5d5e3ee31947b243fc8e7df1981e8d1f",
+    "additionalInfo": {}
+  },
+  {
+    "name": "nick.eth",
+    "type": "ipns",
+    "contentHash": "ipns://12D3KooWAFU1jU7mks2z5F2RrLuRyMkcBw5sqcjsXjD753RNbnYs",
+    "additionalInfo": {}
+  },
+  {
+    "name": "not-a-real-ens-name-ahsalabadkadvhda.eth",
+    "type": "none",
+    "contentHash": null,
+    "additionalInfo": {}
+  }
+]
