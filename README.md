@@ -39,24 +39,24 @@ X-Content-Storage-Type: ipfs-ns
 | `PURGE_CACHE_COUNT` | `"20000"` | Number of keys to purge if `PURGE_CACHE_ON_START` is enabled. |
 | `PURGE_CACHE_PATTERN` | `"*.${DOMAIN_TLD_HOSTNAME}"` | Key pattern to purge if `PURGE_CACHE_ON_START` is enabled. |
 
-### Example
+### Local Example
 
-__Set environment variables__
-
-__Start Redis__
+1. Start Redis
 
 ```
 podman run -p 127.0.0.1:6379:6379 docker.io/library/redis
 ```
 
-__Start dWeb Proxy API__
+2. Configure the necessary environment listed above
+
+3. Start dWeb Proxy API
 
 ```
 npm install
 npm run dev
 ```
 
-__Make a request__
+4. Make a request
 
 ```shell
 $ curl http://localhost:8888 -H 'Host: ens.eth' -sD - -o /dev/null
@@ -71,3 +71,79 @@ Connection: keep-alive
 Keep-Alive: timeout=5
 Transfer-Encoding: chunked
 ```
+
+__Use with Caddy server as a local gateway__
+
+Start `dweb-proxy-api` with the correct environment variables and install [Caddy server](https://github.com/caddyserver/caddy).
+
+Use the following `Caddyfile` configuration (localhost example):
+
+```
+{
+	admin off
+	auto_https off
+
+	local_certs
+
+	log {
+		level DEBUG
+		format console
+	}
+}
+
+&(dweb-api) {
+	reverse_proxy localhost:8888 {
+		transport http
+
+		method GET
+		header_up Host (.*[-a-z0-9]+\.eth) $1
+
+		@proxy status 200
+		handle_response @proxy {
+			@trailing vars_regexp trailing {rp.header.X-Content-Path} ^(.*)/$
+			reverse_proxy @trailing {rp.header.X-Content-Location} {
+				rewrite {re.trailing.1}{uri}
+				header_up Host {rp.header.X-Content-Location}
+				header_up -X-Forwarded-Host
+
+				transport http {
+					dial_timeout 2s
+				}
+
+				@redirect301 status 301
+				handle_response @redirect301 {
+					redir {rp.header.Location} permanent
+				}
+			}
+		}
+	}
+}
+
+:8443 {
+	log {
+		level INFO
+		format console
+	}
+
+	bind 0.0.0.0
+
+	tls internal {
+		on_demand
+	}
+
+	invoke dweb-api
+}
+```
+
+You can use this `Caddyfile` as a starting point for more advanced configurations, however this is sufficient for use as a local gateway (you may wish to use port 443 instead of 8443).
+
+Depending on your environment, you can edit `/etc/hosts` or configure a stub-resolver for `systemd-resolved` (this will let you route all `eth.` queries to your local gateway).
+
+For example, using `/etc/hosts`:
+
+```
+127.0.0.1   localhost ens.eth
+::1         localhost ens.eth
+```
+
+Save the file, launch Caddy (`caddy run`) and then open a browser and navigate to `https://ens.eth:8443`.
