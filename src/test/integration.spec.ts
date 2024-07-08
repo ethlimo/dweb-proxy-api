@@ -14,6 +14,10 @@ import { Request, Response } from "express";
 import { ParamsDictionary } from "express-serve-static-core";
 import { ParsedQs } from "qs";
 import { TestLoggerService } from "../services/LoggerService";
+import { normalizeUrlFragmentForIpfsSubdomainGateway } from "../services/EnsResolverService/utils";
+import { TestLaggyRedisClientProxy } from "../services/CacheService";
+import { IRequestContext } from "../services/lib";
+import { TestResolverService } from "./TestResolverService";
 
 type TestCaseType = {
     name: string,
@@ -33,9 +37,10 @@ interface Options {
     ensSocialsRedirect: boolean,
     blacklisted: boolean | 'throws',
     dohQueryType: "A" | "AAAA" | "CNAME" | "TXT",
-    ensError: boolean | 'throws'
+    ensError: boolean | 'throws',
+    redisIsLaggy: boolean,
 }
-const possibleOptions:Options[] = cartesianProduct({subdomainSupport: [true, false], ensSocialsRedirect: [true, false], blacklisted: [true, false, 'throws'], dohQueryType: ["A", "AAAA", "CNAME", "TXT"], ensError: [false, 'throws']}) as any as Options[];
+const possibleOptions:Options[] = cartesianProduct({subdomainSupport: [true, false], ensSocialsRedirect: [true, false], blacklisted: [true, false, 'throws'], dohQueryType: ["A", "AAAA", "CNAME", "TXT"], ensError: [false, 'throws'], redisIsLaggy: [false, true]}) as any as Options[];
 var testCases = (cases as TestCaseType[]).map((testCase) => {
     return possibleOptions.map((options) => {
         return {
@@ -68,14 +73,15 @@ function isDohServerGetPayloadType(payload: any): payload is {dohServer: ProxySe
 
 type HarnessPayloadType = HarnessProxyServerPayloadType;
 
-function getNameWithEthExtension(name: string): string {
-    return name.endsWith("asdf.local") ? name.substring(0, name.length - ".asdf.local".length) + ".eth" : name;
-}
-
 const harness = (harnessInput: HarnessType) => (payload: HarnessPayloadType) =>
     async (v:TestCaseType&{options: Options}) => 
     {
         var {type, contentHash, additionalInfo, options} = v;
+
+        if(options.redisIsLaggy) {
+            harnessInput.testRedisClient.setProxy(new TestLaggyRedisClientProxy());
+        }
+
         harnessInput.testConfigurationService.set((conf) => {
             conf.ipfs.subdomainSupport = options.subdomainSupport;
             conf.ens.socialsEndpointEnabled = options.ensSocialsRedirect;
@@ -91,15 +97,41 @@ const harness = (harnessInput: HarnessType) => (payload: HarnessPayloadType) =>
             
             for most of the test cases, nameResolvedToEnsName === nameFromHostMayReferToSubdomainOfHostedProxyAddress
         */
-        const nameResolvedToEnsName = getNameWithEthExtension(v.name);
+
+        const nameResolvedToEnsName = harnessInput.hostnameSubstitionService.substituteHostname(v.name);
         const nameFromHostMayReferToSubdomainOfHostedProxyAddress = v.name;
 
         var testEnsEnsServiceExpectedValue : string | null | {error: true | 'throws', reason: string} | undefined = contentHash;
         if(options.ensError) {
             testEnsEnsServiceExpectedValue = {error: options.ensError, reason: "test"};
+
         }
 
-        testEnsEnsServiceExpectedValue !== undefined && harnessInput.testEnsService.set(nameResolvedToEnsName, testEnsEnsServiceExpectedValue)
+        const resolvers = [harnessInput.testEnsService, harnessInput.web3NameSdkService];
+
+        var theRealTestResolverService: TestResolverService;
+
+        if(nameResolvedToEnsName.endsWith("eth")) {
+            theRealTestResolverService = harnessInput.testEnsService;
+        } else if (nameResolvedToEnsName.endsWith("gno")) {
+            theRealTestResolverService = harnessInput.web3NameSdkService;
+        } else {
+            throw "Test case non-totality error"
+        }
+
+        if(testEnsEnsServiceExpectedValue !== undefined) {
+            theRealTestResolverService.set(nameResolvedToEnsName, testEnsEnsServiceExpectedValue);
+        }
+
+        //poison the other resolvers to ensure our factory selects the correct one
+        resolvers.filter((resolver) => resolver !== theRealTestResolverService).forEach((resolver) => {
+            if(testEnsEnsServiceExpectedValue === undefined) {
+                resolver.set(nameResolvedToEnsName, "ASDFASDDFASDHDAHD bad value");
+            } else {
+                //implicit poisoning, undefined is the default
+            }
+        });
+
         if(additionalInfo.arweave) {
             harnessInput.testArweaveResolverService.set(additionalInfo.arweave.query, additionalInfo.arweave.result);
         }
@@ -193,7 +225,7 @@ describe('Proxy API Integration Tests', function () {
                 //if the service errors, we want to be unavailable
                 harnessInput.testDomainQuerySuperagentService.error = true;
             } else {
-                harnessInput.testDomainQuerySuperagentService.setBlacklist(getNameWithEthExtension(originalTestCase.name), true);
+                harnessInput.testDomainQuerySuperagentService.setBlacklist(harnessInput.hostnameSubstitionService.substituteHostname(originalTestCase.name), true);
             }
             const fudge = JSON.parse(JSON.stringify(testCase));
             fudge.options.blacklisted = false; //we don't want the subdomain blacklisted, just the original domain
@@ -237,10 +269,19 @@ describe('Proxy API Integration Tests', function () {
             return;
         }
 
-        contentHash = recalculateIpnsContentHash(type, contentHash, harnessInput, name);
+        const request = {
+            trace_id: "TEST_TRACE_ID",
+        }
+
+        contentHash = recalculateIpnsContentHash(request, type, contentHash, harnessInput, name);
         if (options.subdomainSupport) {
             expect(content_path).to.be.equal(`/`);
-            expect(content_location).to.be.equal(`${contentHash?.substring(7)}.${type}.ipfs`);
+            let fragment = contentHash?.substring(7);
+            //see the en.wikipedia-on-ipfs.org testcase
+            if(type === "ipns") {
+                fragment = fragment && normalizeUrlFragmentForIpfsSubdomainGateway(fragment);
+            }
+            expect(content_location).to.be.equal(`${fragment}.${type}.ipfs`);
         } else {
             expect(content_path).to.be.equal(`/${type}/${contentHash?.substring(7)}/`)
             expect(content_location).to.be.equal("ipfs")
@@ -328,7 +369,7 @@ describe('Proxy API Integration Tests', function () {
         expect(content_storage_type).to.be.undefined;
     });
     
-    gen.runTests();
+    gen.runTests(this);
 });
 
 describe('Caddy API Integration Tests', function () {
@@ -383,7 +424,7 @@ describe('Caddy API Integration Tests', function () {
                 //if the service errors, we want to be unavailable
                 harnessInput.testDomainQuerySuperagentService.error = true;
             } else {
-                harnessInput.testDomainQuerySuperagentService.setBlacklist(getNameWithEthExtension(originalTestCase.name), true);
+                harnessInput.testDomainQuerySuperagentService.setBlacklist(harnessInput.hostnameSubstitionService.substituteHostname(originalTestCase.name), true);
             }
             const fudge = JSON.parse(JSON.stringify(testCase));
             
@@ -398,8 +439,6 @@ describe('Caddy API Integration Tests', function () {
             }
 
             if(res.statusCode === 200) {
-                console.log("logmessage");
-                console.log(originalTestCase.name);
                 (harnessInput.AppContainer.get(DITYPES.LoggerService) as any).logMessages()
             }
 
@@ -460,7 +499,7 @@ describe('Caddy API Integration Tests', function () {
         }
     });
     
-    gen.runTests();
+    gen.runTests(this);
 });
 
 
@@ -536,12 +575,15 @@ describe('DoH GET API Integration Tests', function () {
     },async function(testCase) {
         var {options, type} = testCase
         const { res, _result } = await commonSetup(testCase);
-        const contentHash = recalculateIpnsContentHash(type, testCase.contentHash, harnessInput, testCase.name);
+        const request = {
+            trace_id: "TEST_TRACE_ID",
+        }
+        const contentHash = recalculateIpnsContentHash(request, type, testCase.contentHash, harnessInput, testCase.name);
 
         /*
             DoH should *not* respect the server being hosted at an endpoint, it is for raw ENS queries only
         */
-        if(testCase.name.endsWith("asdf.local")) {
+        if(testCase.name.endsWith("local")) {
             expect(res.statusCode).to.be.equal(200);
             const ret = JSON.parse(_result);
             expect(Math.abs(ret.Status)).to.be.equal(0);
@@ -574,7 +616,7 @@ describe('DoH GET API Integration Tests', function () {
             expect(result.Answer).to.not.be.empty;
             const the_result = result.Answer[0];
             expect(the_result.type).to.be.equal(16);
-            expect(the_result.name).to.be.equal(getNameWithEthExtension(testCase.name));
+            expect(the_result.name).to.be.equal(harnessInput.hostnameSubstitionService.substituteHostname(testCase.name));
             const prefix = type === "arweave" ? `ar://` : `/${getDnslinkPrefixFromType(type)}/`;
             const dnslink_string = `dnslink=${prefix}${contentHash?.substring(contentHash.indexOf("://") + 3)}`;
             expect(the_result.data).to.be.equal(dnslink_string);
@@ -585,7 +627,7 @@ describe('DoH GET API Integration Tests', function () {
         }
     });
     
-    gen.runTests();
+    gen.runTests(this);
 });
 
 function getCodecFromType(type: "ipfs" | "ipns" | "arweave" | "swarm"):string {
@@ -601,9 +643,9 @@ function getCodecFromType(type: "ipfs" | "ipns" | "arweave" | "swarm"):string {
     return type as never
 }
 
-function recalculateIpnsContentHash(type: string, contentHash: string | undefined, harnessInput: HarnessType, name: string) {
+function recalculateIpnsContentHash(request: IRequestContext, type: string, contentHash: string | undefined, harnessInput: HarnessType, name: string) {
     if (type === "ipns" && contentHash) {
-        const peerId = getPeerId(harnessInput.AppContainer.get(DITYPES.LoggerService), contentHash.substring(7), name) || "THIS_SHOULD_NOT_BE_NULL";
+        const peerId = getPeerId(request, harnessInput.AppContainer.get(DITYPES.LoggerService), contentHash.substring(7), name) || "THIS_SHOULD_NOT_BE_NULL";
         return "ipns://" + peerId;
     }
     return contentHash;

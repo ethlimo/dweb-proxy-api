@@ -3,11 +3,12 @@ import { base32 } from "rfc4648";
 import { ILoggerService } from "../LoggerService";
 import { inject, injectable } from "inversify";
 import { DITYPES } from "../../dependencies/types";
+import { IRequestContext } from "../lib";
 
 LoggerFactory.INST.setOptions({ LogLevel: "none" });
 
 export interface IArweaveResolver {
-  resolveArweave: (tx_id: string, ens_name: string) => Promise<string>;
+  resolveArweave: (request: IRequestContext, tx_id: string, ens_name: string) => Promise<string>;
 };
 
 @injectable()
@@ -20,7 +21,7 @@ export class ArweaveResolver implements IArweaveResolver {
     this._logger = logger;
   }
 
-  arweaveContractQuery = async (tx_id: string) => {
+  arweaveContractQuery = async (request: IRequestContext, tx_id: string) => {
     try {
       const contract = this.warp.pst(tx_id);
 
@@ -28,14 +29,22 @@ export class ArweaveResolver implements IArweaveResolver {
       return state;
     } catch (error) {
       this._logger.info(
-        `arweaveContractQuery: invalid arweave tx_id ${tx_id} ${error}`,
+        'invalid arweave tx id',
+        {
+          ...request,
+          origin: 'arweaveContractQuery',
+          context: {
+            tx_id: tx_id,
+            error: error
+          }
+        }
       );
       return undefined;
     }
   };
 
-  resolveArweave = async (tx_id: string, ens_name: string) => {
-    const state = await this.arweaveContractQuery(tx_id);
+  resolveArweave = async (request: IRequestContext, tx_id: string, ens_name: string) => {
+    const state = await this.arweaveContractQuery(request, tx_id);
     if (!state) {
       return tx_id;
     }
@@ -65,7 +74,17 @@ export class ArweaveResolver implements IArweaveResolver {
         return ret;
       } else {
         this._logger.error(
-          `resolveArweave: invalid record ${match} found for ${tx_id} ${ens_name}`,
+          //`resolveArweave: invalid record ${match} found for ${tx_id} ${ens_name}`,
+          'invalid arweave record found',
+          {
+            ...request,
+            origin: 'resolveArweave',
+            context: {
+              match: match,
+              tx_id: tx_id,
+              ens_name: ens_name
+            }
+          }
         );
       }
     }
@@ -76,38 +95,63 @@ export class ArweaveResolver implements IArweaveResolver {
         return ret;
       } else {
         this._logger.error(
-          `resolveArweave: invalid @ record found for ${tx_id} ${ens_name}`,
+          'invalid arweave @ record found',
+          {
+            ...request,
+            origin: 'resolveArweave',
+            context: {
+              tx_id: tx_id,
+              ens_name: ens_name,
+              records,
+            }
+          }
         );
       }
     }
 
-    this._logger.warn(
-      `resolveArweave: fallback no @ record found for ${tx_id} ${ens_name}`,
-    );
+    this._logger.warn('no arweave @ record found',
+    {
+      ...request,
+      origin: 'resolveArweave',
+      context: {
+        tx_id: tx_id,
+        ens_name: ens_name,
+        records,
+      }
+    });
 
     return tx_id;
   };
 }
 
-export const arweaveTxIdToArweaveSandboxSubdomainId = async (logger: ILoggerService, tx_id: string) => {
+export const arweaveTxIdToArweaveSandboxSubdomainId = async (request: IRequestContext, logger: ILoggerService, tx_id: string) => {
   try {
     return base32
       .stringify(Buffer.from(tx_id, "base64"), { pad: false })
       .toLowerCase();
   } catch (e) {
     logger.error(
-      `arweaveTxIdToArweaveSandboxSubdomainId: invalid tx_id ${tx_id} ${e}`,
+      'invalid arweave tx id',
+      {
+        ...request,
+        origin: 'arweaveTxIdToArweaveSandboxSubdomainId',
+        context: {
+          tx_id: tx_id,
+          error: e
+        }
+      }
     );
     return undefined;
   }
 };
 
 export const arweaveUrlToSandboxSubdomain = async (
+  request: IRequestContext,
   logger: ILoggerService,
   tx_id: string,
   arweave_gateway: URL,
 ): Promise<URL> => {
-  const subdomain = await arweaveTxIdToArweaveSandboxSubdomainId(logger, tx_id);
+  const subdomain = await arweaveTxIdToArweaveSandboxSubdomainId(request, logger, tx_id);
   if (!subdomain) {
     return arweave_gateway;
   }

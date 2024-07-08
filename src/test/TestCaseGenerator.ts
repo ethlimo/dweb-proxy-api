@@ -25,7 +25,7 @@ function excludeProperties<T extends object, K extends keyof T>(obj: T, keys: K[
 export class TestRunner<T, O extends object> {
 
     _testCases: (T&{options: O})[];
-    runners: {name: string, run: () => void}[] = [];
+    runners: {name: string, run: (thisvar: Mocha.Suite) => () => void}[] = [];
 
     constructor(private testCases: (T&{options: O})[]) {
         this._testCases = testCases;
@@ -56,16 +56,16 @@ export class TestRunner<T, O extends object> {
             const name = description +' ('+nameBuilder.join(", ")+')';
             return {
                 name,
-                run: func.bind(null, testCase)
+                run: (thisvar: Mocha.Suite) => func.bind(thisvar, testCase)
             }
         })
         this.runners.push(...runner)
     }
 
-    runTests() {
+    runTests(thisvar: Mocha.Suite): void {
         let runner = this.runners.shift();
         while(runner) {
-            it(runner.name, runner.run);
+            it(runner.name, runner.run(thisvar));
             runner = this.runners.shift();
         }
     }

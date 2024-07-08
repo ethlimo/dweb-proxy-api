@@ -5,6 +5,7 @@ import { SinonStubbedInstance, createStubInstance, stub } from 'sinon';
 import { DomainRateLimitService } from '.';
 import { ILoggerService, LoggerService } from '../LoggerService';
 import { IRedisClient, RedisClient } from '../CacheService';
+import { IRequestContext } from "../lib";
 
 describe('DomainRateLimitService', () => {
     let redisClient: SinonStubbedInstance<IRedisClient>;
@@ -25,7 +26,11 @@ describe('DomainRateLimitService', () => {
         redisClient.incr.resolves(1);
         redisClient.ttl.resolves(-1);
 
-        const result = await service.incrementRateLimit(domain, maxQueries, intervalInSeconds);
+        const request: IRequestContext = {
+            trace_id: "TEST_TRACE_ID"
+        }
+
+        const result = await service.incrementRateLimit(request, domain, maxQueries, intervalInSeconds);
 
         expect(result.countOverMax).to.be.false;
         expect(result.count).to.equal(1);
@@ -38,10 +43,14 @@ describe('DomainRateLimitService', () => {
         const maxQueries = 10;
         const intervalInSeconds = 60;
 
+        const request: IRequestContext = {
+            trace_id: "TEST_TRACE_ID"
+        }
+
         redisClient.incr.resolves(2);
         redisClient.ttl.resolves(30);
 
-        const result = await service.incrementRateLimit(domain, maxQueries, intervalInSeconds);
+        const result = await service.incrementRateLimit(request, domain, maxQueries, intervalInSeconds);
         expect(result.countOverMax).to.be.false;
         expect(result.count).to.equal(2);
         expect(result.ttl).to.equal(30);
@@ -53,10 +62,14 @@ describe('DomainRateLimitService', () => {
         const maxQueries = 10;
         const intervalInSeconds = 60;
 
+        const request: IRequestContext = {
+            trace_id: "TEST_TRACE_ID"
+        }
+
         redisClient.incr.resolves(11);
         redisClient.ttl.resolves(30);
 
-        const result = await service.incrementRateLimit(domain, maxQueries, intervalInSeconds);
+        const result = await service.incrementRateLimit(request, domain, maxQueries, intervalInSeconds);
 
         expect(result.countOverMax).to.be.true;
         expect(result.count).to.equal(11);

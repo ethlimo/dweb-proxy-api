@@ -1,19 +1,17 @@
 import { Request } from "express";
-import { IConfigurationService } from "../configuration";
+import { punycodeDomainPartsToUnicode } from "./punycodeConverter";
+import {IHostnameSubstitutionService } from "../services/HostnameSubstitutionService";
+import { VALID_ENS_TLDS } from "../configuration";
 
-export function getDomainOfRequestFromGet(configurationSvc: IConfigurationService, req: Request, param = "domain") {
-  const configuration = configurationSvc.get();
+export function getDomainOfRequestFromGet(hostnameSubstitutionService: IHostnameSubstitutionService, req: Request, param = "domain") {
   let domain = req.query[param];
   if (typeof domain !== "string") {
     return null;
   }
-  let { host } = configuration.ask;
-  if (domain.endsWith("." + host)) {
-    domain = domain.split("." + host)[0] + ".eth";
-  }
-  if (domain.endsWith("." + host)) {
-    domain = domain.split("." + host)[0] + ".eth";
-  }
+
+  domain = hostnameSubstitutionService.substituteHostname(domain);
+
+  domain = punycodeDomainPartsToUnicode(domain);
   if (hostnameIsENSTLD(domain)) {
     return domain;
   } else {
@@ -21,20 +19,8 @@ export function getDomainOfRequestFromGet(configurationSvc: IConfigurationServic
   }
 }
 
-//prerequisite: host in the form a.b.c.d, tld=1 <=> tld=d
-export function stripSubdomainsFromHost(host: string, tld = 1) {
-  if (host.length && host.length >= 2) {
-    return host
-      .split(".")
-      .slice(-1 - tld)
-      .join(".");
-  } else {
-    return null;
-  }
-}
-
 export function hostnameIsENSTLD(hostname: string) {
-  return hostname.endsWith(".eth") || hostname.endsWith(".art");
+  return VALID_ENS_TLDS.find((tld) => hostname.endsWith("."+tld)) !== undefined;
 }
 
 export const ensureTrailingSlash = (path: string) => {
@@ -44,3 +30,9 @@ export const ensureTrailingSlash = (path: string) => {
     return path + "/";
   }
 };
+
+export function getTraceIdFromRequest(req: Request) {
+  const trace_id_header = 'x-limo-id';
+  const trace_id = typeof req.headers[trace_id_header] === "string" ? req.headers[trace_id_header] : "UNDEFINED_TRACE_ID";
+  return trace_id;
+}

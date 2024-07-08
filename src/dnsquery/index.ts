@@ -4,11 +4,12 @@ import { IEnsResolverService, Record } from "../services/EnsResolverService";
 import { Request, Response } from "express";
 import { DITYPES } from "../dependencies/types";
 import { IDomainQueryService } from "../services/DomainsQueryService";
-import { hostnameIsENSTLD } from "../utils";
+import { getTraceIdFromRequest, hostnameIsENSTLD } from "../utils";
 import { recordNamespaceToUrlHandlerMap } from "../services/EnsResolverService/const";
 import { ILoggerService } from "../services/LoggerService";
 import { IConfigurationService } from "../configuration";
 import { inject, injectable } from "inversify";
+import { IRequestContext } from "../services/lib";
 
 type DoHPacket = {
   Status: string;
@@ -26,12 +27,12 @@ type DoHPacket = {
 };
 
 export interface IDnsQuery {
-  dnsqueryPost: (req: Request, res: Response) => void;
-  dnsqueryGet: (req: Request, res: Response) => void;
+  dnsqueryPost: (req: Request, res: Response) => Promise<void>;
+  dnsqueryGet: (req: Request, res: Response) => Promise<void>;
 }
 
 @injectable()
-export class DnsQuery {
+export class DnsQuery implements IDnsQuery {
   _logger: ILoggerService;
   _configurationService: IConfigurationService;
   _domainQueryService: IDomainQueryService;
@@ -45,11 +46,19 @@ export class DnsQuery {
     this._domainQueryService = domainQueryService;
     this._ensResolverService = ensResolverService;
   }
-  logHeaderError = (header: string, req: Request) => {
+  logHeaderError = (request: IRequestContext, header: string, req: Request) => {
     const val = req.header(header);
-    this._logger.error(`dnsqueryPost: unexpected header ${header}=${val}`);
+    this._logger.error('unexpected header', {
+      ...request,
+      origin: 'dnsquery',
+      context: {
+        header,
+        value: val,
+      },
+    });
   };
   questionToEnsAnswer = async (
+    request: IRequestContext,
     question: dnsPacket.Question,
   ): Promise<dnsPacket.TxtAnswer | null> => {
     if (
@@ -57,20 +66,43 @@ export class DnsQuery {
       !hostnameIsENSTLD(question.name)
     ) {
       this._logger.info(
-        `handleDnsQuery: ignoring question ${question.name} (${question.type})`,
+        'ignoring question',
+        {
+          ...request,
+          origin: 'dnsquery',
+          context: {
+            question: question.name,
+            type: question.type,
+          },
+        }
       );
       return null;
     }
-    this._logger.info(`handleDnsQuery: Processing request for ${question.name}`);
+    this._logger.info('processing request for ${question.name}', {
+      ...request,
+      origin: 'dnsquery',
+      context: {
+        question: question.name,
+        type: question.type,
+      },
+    });
     var dohDomain: string;
     if (question.name.startsWith("_dnslink.")) {
       dohDomain = question.name.split("_dnslink.")[1];
-      this._logger.info(`handled dnslink prefix for ${dohDomain}`);
+      this._logger.info('handled dnslink prefix', {
+        ...request,
+        origin: 'dnsquery',
+        context: {
+          question: question.name,
+          type: question.type,
+          dohDomain,
+        },
+      });
     } else {
       dohDomain = question.name;
     }
   
-    const result = await this._ensResolverService.resolveEns(dohDomain);
+    const result = await this._ensResolverService.resolveEns(request, dohDomain);
   
     var link = recordToDnslink(result.record);
     if (!link) {
@@ -84,7 +116,7 @@ export class DnsQuery {
       type: "TXT",
     };
   };
-  handleDnsQuery = async (dnsRequest: dnsPacket.Packet) => {
+  handleDnsQuery = async (request: IRequestContext, dnsRequest: dnsPacket.Packet) => {
     var responses = [];
     if (!dnsRequest.questions) {
       dnsRequest.questions = [];
@@ -101,15 +133,32 @@ export class DnsQuery {
     var srvfail = false;
 
     for (var question of dnsRequest.questions) {
-      const ret = await this.questionToEnsAnswer(question);
+      const ret = await this.questionToEnsAnswer(request, question);
       if (ret) {
         this._logger.info(
-          `handleDnsQuery: response to question ${question.name} (${question.type}) ${ret.data}`,
+          'response to question',
+          {
+            ...request,
+            origin: 'dnsquery',
+            context: {
+              question: question.name,
+              type: question.type,
+              answer: ret.data,
+            },
+          }
         );
         responses.push(ret);
       } else {
         this._logger.error(
-          `handleDnsQuery: No response to ${question.name} (type=${question.type})`,
+          'no respionse',
+          {
+            ...request,
+            origin: 'dnsquery',
+            context: {
+              question: question.name,
+              type: question.type,
+            },
+          }
         );
         srvfail = true;
       }
@@ -139,14 +188,18 @@ export class DnsQuery {
     }
   };
   dnsqueryPost = async (req: Request, res: Response) => {
+    const trace_id = getTraceIdFromRequest(req);
+    const request = {
+      trace_id,
+    }
     if (req.header("accept") !== "application/dns-message") {
-      this.logHeaderError("accept", req);
+      this.logHeaderError(request, "accept", req);
       errorBuilder(res, 415);
       return;
     }
   
     if (req.headers["content-type"] !== "application/dns-message") {
-      this.logHeaderError("content-type", req);
+      this.logHeaderError(request, "content-type", req);
       errorBuilder(res, 415);
       return;
     }
@@ -163,14 +216,14 @@ export class DnsQuery {
   
     if (dnsRequest.questions) {
       for (const question of dnsRequest.questions) {
-        if (await this._domainQueryService.checkBlacklist(question.name)) {
+        if (await this._domainQueryService.checkBlacklist(request, question.name)) {
           blockedForLegalReasons(res);
           return;
         }
       }
     }
   
-    const responsePacket = await this.handleDnsQuery(dnsRequest);
+    const responsePacket = await this.handleDnsQuery(request, dnsRequest);
     if (responsePacket.error) {
       errorBuilder(res, responsePacket.code);
       return;
@@ -184,6 +237,10 @@ export class DnsQuery {
     }
   };
   dnsqueryGet = async (req: Request, res: Response) => {
+    const trace_id = getTraceIdFromRequest(req);
+    const request:IRequestContext = {
+      trace_id,
+    }
     const configuration = this._configurationService.get();
     let dnsRequest: dnsPacket.Packet | null = null;
     //TODO: is name already punycoded? how does it behave with utf8?
@@ -223,7 +280,7 @@ export class DnsQuery {
     }
     if (dnsRequest && dnsRequest.questions) {
       for (const question of dnsRequest.questions) {
-        if (await this._domainQueryService.checkBlacklist(question.name)) {
+        if (await this._domainQueryService.checkBlacklist(request, question.name)) {
           blockedForLegalReasons(res);
           return;
         }
@@ -232,7 +289,7 @@ export class DnsQuery {
   
     var result;
     try {
-      result = dnsRequest && (await this.handleDnsQuery(dnsRequest));
+      result = dnsRequest && (await this.handleDnsQuery(request, dnsRequest));
     } catch(e) {
       this._logger.error("dnsqueryGet: error handling dns query", e);
       res.writeHead(200);
@@ -268,7 +325,15 @@ export class DnsQuery {
           if (q.type === "TXT") {
             decoded_type = 16;
           } else {
-            this._logger.error(`dnsqueryGet: unhandled question type ${q.type}`);
+            this._logger.error('unhandled question type',
+            {
+              ...request,
+              origin: 'dnsquery',
+              context: {
+                question: q.name,
+                type: q.type,
+              },
+            });
             continue;
           }
           const tmp = {

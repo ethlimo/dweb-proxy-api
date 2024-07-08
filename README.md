@@ -1,10 +1,8 @@
-# eth.limo dWeb Proxy API
+# [eth.limo](https://eth.limo) dWeb Gateway API
 
-NOTE - This documentation is a WIP.
+Backend service API for use with reverse proxies to deploy an HTTP [ENS](https://ens.domains) or [GNS](https://genomedomains.com/) gateway capable of resolving [IPFS](https://docs.ipfs.tech/), [IPNS](https://docs.ipfs.tech/how-to/publish-ipns/), [Arweave](https://www.arweave.org/), [Arweave Naming Service (ARNS)](https://docs.ar.io/arns/#overview), and [Swarm](https://www.ethswarm.org/) content.
 
-Backend service API for use with reverse proxies to deploy an HTTP ENS gateway capable of resolving IPFS, IPNS, Arweave, Arweave Naming Service (ARNS), and Swarm content.
-
-Upstream proxies can forward ENS hostnames for resolution and properly route them to the appropriate storage gateway path and destination via the following response headers:
+Upstream proxies can forward ENS and GNS hostnames for resolution and properly route them to the appropriate storage gateway path and destination via the following response headers:
 
 IPFS example:
 ```
@@ -13,13 +11,18 @@ X-Content-Path: /
 X-Content-Storage-Type: ipfs-ns
 ```
 
+__Gateway request flow__
+
+![alt text](./images/flow.jpg "Example resolution and request data flow")
+
 ### Configuration
 
 | Environment Variable        | Default           | Purpose  |
 | ------------- |:-------------:| -----:|
 | `LISTEN_PORT`     | `8888` | Proxy API listener port. |
-| `IPFS_SUBDOMAIN_SUPPORT`     | `"false"` | Return IPFS gateway destination in subdomain format, i.e. `${cid}.ipfs.dweb.link`. Otherwise results are returned as `ipfs.dweb.link/ipfs/${cid}`. |
-| `IPFS_AUTH_KEY`     | `null` | Basic authentication for IPFS gateway backend, if required. |
+| `IPFS_SUBDOMAIN_SUPPORT`     | `"false"` | Return IPFS gateway destination in subdomain format, i.e. `${cid\|peerId}.${ipfs\|ipns}.dweb.link`. Otherwise results are returned as `dweb.link/ipfs/${cid}`. |
+| `IPFS_AUTH_KEY`     | `null` | Basic authentication for `IPFS_KUBO_API_URL`. |
+| `IPFS_KUBO_API_URL` | `undefined` | URL to Kubo `/api/v0/name/resolve` service. This setting performs IPNS name resolution and PeerId conversion to CIDv1 identifiers during the contentHash lookup process. Note, this does not enable or disable IPNS support (as this is performed by the IPFS backend) but rather attempts to use resolved CID values as cache keys as opposed to peerIds. Please read the official IPFS [documentation](https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-name-resolve) for more information. |
 | `ARWEAVE_TARGET`     | `"https://arweave.net"` | Arweave gateway FQDN. |
 | `SWARM_TARGET`     | `"https://api.gateway.ethswarm.org"` | Swarm gateway FQDN. |
 | `IPFS_TARGET` | `http://127.0.0.1:8080` | FQDN of IPFS gateway backend to use for requests. |
@@ -29,9 +32,10 @@ X-Content-Storage-Type: ipfs-ns
 | `ASK_LISTEN_PORT` | `"9090"`      |    Ask listener port. |certificate issuance requests from Caddy server: `:9090/ask?domain=${name}.eth`. |
 | `ETH_RPC_ENDPOINT` | `"http://192.168.1.7:8845"` | Primary RPC provider FQDN for ENS resolution. |
 | `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | Secondary failover RPC provider FQDN. |
+| `GNO_RPC_ENDPOINT` |  `https://rpc.gnosischain.com` | Primary RPC endpoint for Gnosis. |
 | `DOMAINSAPI_ENDPOINT` | `null` | API endpoint for custom domain routing logic. Can be set to any endpoint that returns a `200` if you do not need this feature. |
 | `LOG_LEVEL` | `"info"` | Set the logging level. |
-| `DOMAIN_TLD` | `.limo` | When operating a gateway, set this to the parent domain or TLD used. |
+| `LIMO_HOSTNAME_SUBSTITUTION_CONFIG` | `{ "eth.limo": "eth", "eth.local": "eth", "gno.limo": "gno", "gno.local": "gno" }` | The domains and services corresponding to each domain name for gateway operations. When set via an environment variable, this must be a base64 encoded JSON object. |
 | `DOMAIN_TLD_HOSTNAME` | `"eth"` | Subdomain to use with gateway (naming service dependent). For example, `ens.eth.limo`. Contingent upon the setting of `DOMAIN_TLD` for gateway operations. |
 | `DNSQUERY_ENABLED` | `"true"` | Enable DNS over HTTPS (DoH) listener. |
 | `DNSQUERY_LISTEN_PORT` | `"11000"` | Listener port for DoH. |
@@ -137,7 +141,7 @@ Use the following `Caddyfile` configuration (localhost example):
 
 You can use this `Caddyfile` as a starting point for more advanced configurations, however this is sufficient for use as a local gateway (you may wish to use port 443 instead of 8443).
 
-Depending on your environment, you can edit `/etc/hosts` or configure a stub-resolver for `systemd-resolved` (this will let you route all `eth.` queries to your local gateway).
+Depending on your environment, either edit `/etc/hosts` or configure a stub-resolver for `systemd-resolved` (this will let you route all `eth.` queries to your local gateway).
 
 For example, using `/etc/hosts`:
 

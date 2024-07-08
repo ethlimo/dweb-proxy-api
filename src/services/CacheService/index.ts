@@ -1,13 +1,21 @@
 import { Redis } from "ioredis";
-import { inject, injectable } from "inversify";
+import { inject, injectable, interfaces } from "inversify";
 import { serialize } from "typeserializer";
 import NodeCache from "node-cache";
 import { ILoggerService } from "../LoggerService";
 import { DITYPES } from "../../dependencies/types";
-import { Container } from "inversify";
 import { ZodType } from "zod";
 import { IConfigurationService } from "../../configuration";
 import redisMock from "ioredis-mock";
+import { IRequestContext } from "../lib";
+
+interface TheRedisPartsWeUse {
+  get: typeof Redis.prototype.get,
+  set: typeof Redis.prototype.set,
+  ttl: (key: string) => Promise<number>,
+  incr: typeof Redis.prototype.incr,
+  expire: typeof Redis.prototype.expire,
+}
 
 export interface IRedisClient {
   get(key: string): Promise<string | null>;
@@ -16,43 +24,54 @@ export interface IRedisClient {
   expire(key: string, duration: number): Promise<number>;
   incr(key: string): Promise<number>;
 }
+
 @injectable()
 export class AbstractRedisClient implements IRedisClient {
-  _redis: Redis;
+  _redis: TheRedisPartsWeUse;
   _configurationService: IConfigurationService;
+  _timeout = 1000;
+
+  private _wait(ms: number, reason: string) {
+    return new Promise((_, reject) => setTimeout(() => reject(new Error(`AbstractRedisClient timeout: ${reason}`)), ms));
+  }
+
+  private _racePromise<T>(ms: number, reason: string, promise: Promise<T>) {
+    return Promise.race([promise, this._wait(ms, reason)]) as Promise<T>;
+  }
+
   constructor() {
   }
 
   async get(key: string): Promise<string | null> {
-    return this._redis.get(key);
+    return this._racePromise(this._timeout, `get ${key}`, this._redis.get(key));
   }
 
   async set(key: string, value: string, duration: number): Promise<"OK"> {
-    return this._redis.set(key, value, "EX", duration);
+    return this._racePromise(this._timeout, `set ${key}=${value} (duration: ${duration})`, this._redis.set(key, value, "EX", duration));
   }
 
   async ttl(key: string): Promise<number> {
-    return this._redis.ttl(key);
+    return this._racePromise(this._timeout, `ttl ${key}`, this._redis.ttl(key));
   }
   async incr(key: string): Promise<number> {
-    return this._redis.incr(key);
+    return this._racePromise(this._timeout, `incr ${key}`, this._redis.incr(key));
   };
   async expire(key: string, duration: number): Promise<number> {
-    return this._redis.expire(key, duration);
+    return this._racePromise(this._timeout, `expire ${key} ${duration}`, this._redis.expire(key, duration));
   }
 }
 
 export interface INamedMemoryCache {
   getServiceName(): string;
-  put: <T>(key: string, v: T, ttl?: Number) => void;
-  get: <T>(key: string) => Promise<T | undefined>;
-  getTtl: (key: string) => Promise<number | undefined>;
+  put: <T>(request: IRequestContext, key: string, v: T, ttl?: Number) => void;
+  get: <T>(request: IRequestContext, key: string) => Promise<T | undefined>;
+  getTtl: (request: IRequestContext, key: string) => Promise<number | undefined>;
 }
 
 export class MemoryCacheFactory {
   memoryCaches = new Map<string, INamedMemoryCache>();
   createNamedMemoryCacheFactory = (
-    container: Container,
+    context: interfaces.Context,
     serviceName: string,
   ): INamedMemoryCache => {
     if (this.memoryCaches.has(serviceName)) {
@@ -63,9 +82,9 @@ export class MemoryCacheFactory {
         return namedMemoryCache;
       } else {
         const v = new NamedMemoryCache(
-          container.get<ILoggerService>(DITYPES.LoggerService),
+          context.container.get<ILoggerService>(DITYPES.LoggerService),
           serviceName,
-          container.get<IConfigurationService>(DITYPES.ConfigurationService),
+          context.container.get<IConfigurationService>(DITYPES.ConfigurationService),
         );
         this.memoryCaches.set(serviceName, v);
         return v;
@@ -73,6 +92,8 @@ export class MemoryCacheFactory {
     }
   };
 }
+
+
 
 @injectable()
 export class RedisClient extends AbstractRedisClient {
@@ -86,6 +107,10 @@ export class RedisClient extends AbstractRedisClient {
 @injectable()
 export class TestRedisClient extends AbstractRedisClient {
   mappings = new Map<string, string | null>();
+
+  //this is gross but it's necessary because the test suite does early binding of the server service
+  proxy: AbstractRedisClient | null;
+
   constructor(@inject(DITYPES.ConfigurationService) configurationService: IConfigurationService) {
     super();
     this._configurationService = configurationService;
@@ -93,16 +118,43 @@ export class TestRedisClient extends AbstractRedisClient {
   }
 
   async get(key: string): Promise<string | null> {
+    if(this.proxy) {
+      return this.proxy.get(key);
+    }
     return this.mappings.get(key) || null;
   }
 
   async set(key: string, value: string, duration: number): Promise<"OK"> {
+    if(this.proxy) {
+      return this.proxy.set(key, value, duration);
+    }
     this.mappings.set(key, value);
     return "OK";
   }
 
   async ttl(key: string): Promise<number> {
+    if(this.proxy) {
+      return this.proxy.ttl(key);
+    }
     return 69;
+  }
+
+  async incr(key: string): Promise<number> {
+    if(this.proxy) {
+      return this.proxy.incr(key);
+    }
+    return 70;
+  }
+
+  async expire(key: string, duration: number): Promise<number> {
+    if(this.proxy) {
+      return this.proxy.expire(key, duration);
+    }
+    return 71;
+  }
+
+  setProxy(proxy: AbstractRedisClient | null) {
+    this.proxy = proxy;
   }
 }
 
@@ -113,9 +165,9 @@ export class NamedMemoryCache implements INamedMemoryCache {
 
   private _logger: ILoggerService;
   private _serviceName: string;
-  public async put<T>(key: string, v: T, ttl?: number) {
+  public async put<T>(request: IRequestContext, key: string, v: T, ttl?: number) {
     const configuration = this._configurationService.get();
-    this._logger.debug(`${this._serviceName} memoryCache: interning ${key}`);
+    this._logger.debug(`interning ${key}`, { ...request, origin: "NamedMemoryCache" });
     if (ttl) {
       this._cache.set<T>(
         key,
@@ -126,7 +178,7 @@ export class NamedMemoryCache implements INamedMemoryCache {
       this._cache.set<T>(key, v, configuration.cache.ttl);
     }
   }
-  async get<T>(key: string): Promise<T | undefined> {
+  async get<T>(request: IRequestContext, key: string): Promise<T | undefined> {
     const v = this._cache.get<T>(key);
     return v;
   }
@@ -147,30 +199,27 @@ export class NamedMemoryCache implements INamedMemoryCache {
       stdTTL: this._configurationService.get().cache.ttl,
     });
     this._cache.on("expired", function (key, value) {
-      const currDate = new Date();
-      logger.info(
-        `PID ${
-          process.pid
-        } Expired memcache for ${key} with value of ${JSON.stringify(
-          value,
-        )} at ${currDate.toLocaleString()}`,
-      ); //implements #13
+      logger.info("expired key", {origin: "NodeCache expired", trace_id: "N/A", context: {
+        key: key,
+        value: value
+      }}); //implements #13
     });
   }
 
-  public async getTtl(key: string): Promise<number | undefined> {
+  public async getTtl(request: IRequestContext, key: string): Promise<number | undefined> {
     return this._cache.getTtl(key);
   }
 }
 
 export interface ICacheService {
   memoize: <RT>(
+    request: IRequestContext,
     fThunk: () => Promise<Awaited<RT>>,
     schema: ZodType<RT>,
     dbPrefix: string,
     key: string,
   ) => Promise<Awaited<RT>>;
-  getTtl: (dbPrefix: string, key: string) => Promise<number | undefined>;
+  getTtl: (request: IRequestContext, dbPrefix: string, key: string) => Promise<number | undefined>;
 }
 
 @injectable()
@@ -190,6 +239,7 @@ export class RedisCacheService implements ICacheService {
   }
 
   public async memoize<RT>(
+    request: IRequestContext,
     fThunk: () => Promise<Awaited<RT>>,
     schema: ZodType<RT>,
     dbPrefix: string,
@@ -213,7 +263,15 @@ export class RedisCacheService implements ICacheService {
           return await parsedValue;
         } else {
           this._logger.error(
-            `Failed to parse cached value for key ${cKey} with value ${cachedValue}, treating as uncached in redis layer`,
+            `Failed to parse cached value for, treating as uncached in redis layer`,
+            {
+              ...request,
+              origin: "RedisCacheService",
+              context: {
+                key: cKey,
+                value: cachedValue,
+              }
+            }
           );
           cachedValue = null;
         }
@@ -222,22 +280,47 @@ export class RedisCacheService implements ICacheService {
       const result = await fThunk();
       try {
         this._logger.info(
-          `Setting cache value for key ${cKey} with ttl ${ttl}`,
+          'Setting cache value',
+          {
+            ...request,
+            origin: "RedisCacheService",
+            context: {
+              key: cKey,
+              value: result,
+              ttl: ttl,
+            }
+          }
         );
         await this._redisClient.set(cKey, serialize(result), ttl);
       } catch (e) {
-        this._logger.error(`Failed to set cache value for key ${cKey}: ${e}`);
+        this._logger.error('Failed to set cache value', {
+          ...request,
+          origin: "RedisCacheService",
+          context: {
+            key: cKey,
+            value: result,
+            ttl: ttl,
+          }
+        });
       }
       return result;
     } catch (e) {
       this._logger.error(
-        `RedisCacheService: Received error when querying ${cKey} ${e}`,
+        'received error when querying cache',
+        {
+          ...request,
+          origin: "RedisCacheService",
+          context: {
+            key: cKey,
+            error: e,
+          }
+        }
       );
       return fThunk();
     }
   }
 
-  public async getTtl(dbPrefix: string, key: string): Promise<number> {
+  public async getTtl(request: IRequestContext, dbPrefix: string, key: string): Promise<number> {
     const cKey = `${dbPrefix}/${key}`;
     return await this._redisClient.ttl(cKey);
   }
@@ -264,6 +347,7 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
   }
 
   public async memoize<RT>(
+    request: IRequestContext,
     fThunk: () => Promise<Awaited<RT>>,
     schema: ZodType<RT>,
     dbPrefix: string,
@@ -274,46 +358,106 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
     const defaultTtl = configuration.cache.ttl;
 
     try {
-      const cachedValue = await this._innerMemoryCache.get<RT>(cKey);
+      const cachedValue = await this._innerMemoryCache.get<RT>(request, cKey);
       if (cachedValue) {
         this._logger.info(
-          `LocallyCachedRedisCacheService: returning cached value for key ${cKey} via memory cache`,
+          'LocallyCachedRedisCacheService: returning cached value memory cache',
+          {
+            ...request,
+            origin: "LocallyCachedRedisCacheService",
+            context: {
+              key: cKey,
+              value: cachedValue,
+            }
+          }
         );
         return cachedValue;
       }
 
       const result = await this._innerRedis.memoize<RT>(
+        request,
         fThunk,
         schema,
         dbPrefix,
         key,
       );
       const ttl = Math.min(
-        (await this._innerRedis.getTtl(dbPrefix, key)) || defaultTtl,
+        (await this._innerRedis.getTtl(request, dbPrefix, key)) || defaultTtl,
         defaultTtl,
       );
       this._logger.info(
-        `LocallyCachedRedisCacheService: setting cached value for key ${cKey} via memory cache with ttl ${ttl}`,
+        'setting cached value for via memory cache',
+        {
+          ...request,
+          origin: "LocallyCachedRedisCacheService",
+          context: {
+            key: cKey,
+            value: result,
+            ttl: ttl,
+          }
+        }
       );
-      this._innerMemoryCache.put<RT>(cKey, result, ttl);
+      this._innerMemoryCache.put<RT>(request, cKey, result, ttl);
       return result;
     } catch (e) {
-      this._logger.error(e);
+      this._logger.error('memoize error', {
+        ...request,
+        origin: "LocallyCachedRedisCacheService",
+        context: {
+          key: cKey,
+          error: e,
+        }
+      });
       return fThunk();
     }
   }
 
   public async getTtl(
+    request: IRequestContext,
     dbPrefix: string,
     key: string,
   ): Promise<number | undefined> {
     //return ttl from _innerMemoryCache before redis cache
     const cKey = `${dbPrefix}/${key}`;
-    const cachedValue = await this._innerMemoryCache.getTtl(cKey);
+    const cachedValue = await this._innerMemoryCache.getTtl(request, cKey);
     if (cachedValue) {
       return cachedValue;
     } else {
-      return await this._innerRedis.getTtl(dbPrefix, key);
+      return await this._innerRedis.getTtl(request, dbPrefix, key);
     }
+  }
+}
+
+class TestLaggyRedisClientInnerRedis implements TheRedisPartsWeUse {
+  inner = () => new Promise((_, reject) => {
+    setTimeout(() => reject("Error: timeout"), 100000);
+  });
+
+  get(key: string): Promise<string> {
+    return this.inner() as any;
+  }
+
+  set(key: string, value: string): Promise<"OK"> {
+    return this.inner() as any;
+  }
+
+  ttl(key: string): Promise<number> {
+    return this.inner() as any;
+  }
+
+  incr(key: string): Promise<number> {
+    return this.inner() as any;
+  }
+
+  expire(key: string, seconds: number): Promise<number> {
+    return this.inner() as any;
+  }
+}
+
+export class TestLaggyRedisClientProxy extends AbstractRedisClient {
+  constructor() {
+    super();
+    this._redis = new TestLaggyRedisClientInnerRedis();
+    this._timeout = 5;
   }
 }
