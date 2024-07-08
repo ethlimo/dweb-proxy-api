@@ -1,16 +1,17 @@
 import { ErrorSuccess } from "../utils/ErrorSuccess";
 import { injectable } from "inversify";
-import { IEnsService, Tag, ErrorType } from "../services/EnsService";
+import { INameService, Tag, ErrorType } from "../services/NameService";
 import { IArweaveResolver } from "../services/EnsResolverService/arweave";
+import { IRequestContext } from "../services/lib";
 
 @injectable()
-export class TestResolverService implements IEnsService, IArweaveResolver {
+export class TestResolverService implements INameService, IArweaveResolver {
   mappings = new Map<string, string | null | {
     error: true | "throws";
     reason: string;
   }>();
   //TODO: this is a hack, scripts/dump_test_cases.ts should run arweave cases through resolveArweave as an extra parameter
-  resolveArweave: (tx_id: string, ens_name: string) => Promise<string> = async (tx_id: string, ens_name: string) => {
+  resolveArweave: (request: IRequestContext, tx_id: string, ens_name: string) => Promise<string> = async (request: IRequestContext, tx_id: string, ens_name: string) => {
     const res = this.mappings.get(tx_id);
     if (res === undefined) {
       throw new Error(`TestResolverService: no mapping for ${ens_name}`);
@@ -25,6 +26,7 @@ export class TestResolverService implements IEnsService, IArweaveResolver {
   }
 
   getContentHash(
+    request: IRequestContext,
     name: string
   ): Promise<ErrorSuccess<string | null, Tag, ErrorType>> {
     const res = this.mappings.get(name);

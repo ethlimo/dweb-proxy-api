@@ -1,8 +1,8 @@
 import "reflect-metadata"
 import { DefaultConfigurationService, TestConfigurationService } from "../configuration";
-import { EnsService } from "../services/EnsService";
 import { LoggerService } from "../services/LoggerService";
 import { ArweaveResolver, arweaveTxIdToArweaveSandboxSubdomainId } from "../services/EnsResolverService/arweave";
+import { EnsService } from "../services/NameService/EnsService";
 
 const configurationService = new TestConfigurationService();
 //this is a hack to ensure certain values (i.e. no logging) on the configuration service
@@ -67,7 +67,12 @@ const testCases = [
 const main = async () => {
     const results = [];
     for (const testCase of testCases) {
-        const contentHash = await ensService.getContentHash(testCase.name);
+        const request = {
+            trace_id: "TEST_TRACE_ID",
+        };
+        const contentHash = await ensService.getContentHash(
+            request,
+            testCase.name);
         const additionalInfo:Partial<{
             arweave: {
                 result: string,
@@ -83,8 +88,8 @@ const main = async () => {
                 throw "arweave result is null"
             }
             const ar_id = contentHash.result.split("arweave://")[1];
-            const arweaveResult = await arweaveService.resolveArweave(ar_id, testCase.name);
-            const subdomain_sandbox_id = await arweaveTxIdToArweaveSandboxSubdomainId(loggerService, ar_id)
+            const arweaveResult = await arweaveService.resolveArweave(request, ar_id, testCase.name);
+            const subdomain_sandbox_id = await arweaveTxIdToArweaveSandboxSubdomainId(request, loggerService, ar_id)
             if(!subdomain_sandbox_id) {
                 throw "subdomain_sandbox_id is null"
             }

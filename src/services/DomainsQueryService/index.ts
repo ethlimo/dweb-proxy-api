@@ -6,6 +6,7 @@ import { hostnameIsENSTLD } from "../../utils";
 import { ICacheService } from "../CacheService";
 import * as z from "zod";
 import { IConfigurationService } from "../../configuration";
+import { IRequestContext } from "../lib";
 
 //passthrough because we want to preserve the full query response
 const DomainQueryValueCodec = z.object({
@@ -23,9 +24,9 @@ const createDefaultDomainQueryValue = (domain:string): DomainQueryValue => ({
 export type DomainQueryValue = z.infer<typeof DomainQueryValueCodec>;
 
 export interface IDomainQueryService {
-  domainQuery: (domain: string) => Promise<DomainQueryValue | null>;
-  checkBlacklist: (domain: string) => Promise<boolean>;
-  checkLinkedDomains: (domain: string) => Promise<string | null>;
+  domainQuery: (request: IRequestContext, domain: string) => Promise<DomainQueryValue | null>;
+  checkBlacklist: (request: IRequestContext, domain: string) => Promise<boolean>;
+  checkLinkedDomains: (request: IRequestContext, domain: string) => Promise<string | null>;
 }
 
 //shallow mock for testing
@@ -68,27 +69,54 @@ export class DomainQueryService implements IDomainQueryService {
     this._cacheService = cacheService;
     this._configurationService = configurationService;
   }
-  domainQuery = async (domain: string): Promise<DomainQueryValue> => this._cacheService.memoize(() => this.domainQueryInternal(domain), DomainQueryValueCodec, "domainQuery", domain)
-  domainQueryInternal = async (domain: string): Promise<DomainQueryValue> => {
+  domainQuery = async (request: IRequestContext, domain: string): Promise<DomainQueryValue> => this._cacheService.memoize(request, () => this.domainQueryInternal(request, domain), DomainQueryValueCodec, "domainQuery", domain)
+  domainQueryInternal = async (request: IRequestContext, domain: string): Promise<DomainQueryValue> => {
     const configuration = this._configurationService.get();
     if (!configuration.domainsapi.endpoint) {
       this._logger.error(
-        "domainQuery: domainsapi endpoint not set up properly, short circuiting checks",
+        "domainQuery: configuration.domainsapi.endpoint is not set, short circuiting checks",
+        {
+          ...request,
+          origin: "DomainQueryService",
+          context: {
+            domain,
+          },
+        }
       );
       return createDefaultDomainQueryValue(domain);
     }
     if (!domain) {
-      this._logger.error("domainQuery: received empty string domain");
+      this._logger.error("received empty string domain", {
+        ...request,
+        origin: "DomainQueryService",
+      });
       return createDefaultDomainQueryValue(domain);
     }
 
     const ret = await this._superAgentSvc.query(domain);
     if (ret.error) {
       if(ret.error.status === 404) {
-        this._logger.debug(`domainQuery: serving default value for ${domain}`);
+        this._logger.debug('serving default value', {
+          ...request,
+          origin: 'DomainQueryService',
+          context: {
+            domain,
+          }
+        });
       } else {
         this._logger.error(
-          `domainQuery: ${configuration.domainsapi.endpoint}${ret.error.path} returned ${ret.error.status} (${ret.error.message})`,
+          'endpoint returned error',
+          {
+            ...request,
+            origin: 'DomainQueryService',
+            context: {
+              domain,
+              status: ret.error.status,
+              message: ret.error.message,
+              path: ret.error.path,
+              endpoint: configuration.domainsapi.endpoint,
+            }
+          }
         );
         //FIXME: might be necessary to assume blacklist if we get a 500? we need to pass a value that doesn't get cached
       }
@@ -99,13 +127,20 @@ export class DomainQueryService implements IDomainQueryService {
         const payload = DomainQueryValueCodec.parse(json);
         return payload;
       } catch (e) {
-        this._logger.error(`domainQuery: could not deserialize ${e}`);
+        this._logger.error('failed to deserialize response', {
+          ...request,
+          origin: 'DomainQueryService',
+          context: {
+            domain,
+            text: ret.text,
+          }
+        });
         return createDefaultDomainQueryValue(domain);
       }
     }
   };
 
-  checkBlacklist = async (domain: string) => {
+  checkBlacklist = async (request: IRequestContext, domain: string) => {
     if (!domain) {
       return false;
     }
@@ -114,7 +149,7 @@ export class DomainQueryService implements IDomainQueryService {
 
     for (var i = 0; i < explode.length; i++) {
       const subdomain = explode.slice(i).join(".");
-      const query = await this.domainQuery(subdomain);
+      const query = await this.domainQuery(request, subdomain);
       if (query && query["blacklisted"]) {
         return true;
       }
@@ -125,7 +160,7 @@ export class DomainQueryService implements IDomainQueryService {
   /**
    * precondition: domain must eventually terminate with a canonical_name entry ending in .eth
    */
-  checkLinkedDomains = async (domain: string): Promise<string | null> => {
+  checkLinkedDomains = async (request: IRequestContext, domain: string): Promise<string | null> => {
     const configuration = this._configurationService.get();
     //cycle detection is inbuilt via max_hops, if max_hops is expected to be large then needs hashmap of visited domains
     var tries = configuration.domainsapi.max_hops;
@@ -141,14 +176,22 @@ export class DomainQueryService implements IDomainQueryService {
         found = true;
         break;
       } else {
-        const tmp = await this.domainQuery(search);
+        const tmp = await this.domainQuery(request, search);
         search = tmp?.canonical_name ?? null;
       }
       tries = tries - 1;
     } while (tries > 0 && !found);
     if (!found) {
       this._logger.error(
-        `checkLinkedDomains: ${domain} queried but no canonical_name link exists`,
+        'domain queried but no canonical_name link exists',
+        {
+          ...request,
+          origin: 'DomainQueryService',
+          context: {
+            domain,
+            search,
+          }
+        }
       );
     }
     return search;

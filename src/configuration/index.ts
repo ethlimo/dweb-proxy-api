@@ -1,4 +1,11 @@
-import { inject, injectable } from "inversify";
+import {injectable } from "inversify";
+
+export const VALID_ENS_TLDS = [
+  "eth",
+  "gno",
+  "art",
+]
+
 
 //FIXME: ???
 const createHostname = (...args: string[]) => {
@@ -6,14 +13,9 @@ const createHostname = (...args: string[]) => {
   for (const v of args) {
     ret.push(v.replace(".", ""));
   }
-
   return ret;
 };
 
-//FIXME: sanity check next 3 lines? also configuration.cache.purge_pattern seems wrong?
-const defaultTld = process.env.DOMAIN_TLD || ".limo";
-const defaultHostname = process.env.DOMAIN_TLD_HOSTNAME || "eth";
-const defaultHost = createHostname(defaultHostname, defaultTld).join(".");
 const configuration = {
   // Ethereum JSON RPC endpoint
   ethereum: {
@@ -23,7 +25,9 @@ const configuration = {
     provider_stall_timeout_ms: parseInt(process.env.ETH_PROVIDER_STALL_TIMEOUT_MS || "200"), //see fallbackProviderConfig.stallTimeout
     provider_timeout_ms: parseInt(process.env.ETH_PROVIDER_TIMEOUT_MS || "7000"), //see provider._getConnection().timeout
     quorum: parseInt(process.env.ETH_PROVIDER_QUORUM || "1"),
-
+  },
+  gnosis: {
+    rpc: process.env.GNO_RPC_ENDPOINT || "https://rpc.gnosischain.com",
   },
   // Storage backends
   ipfs: {
@@ -32,6 +36,10 @@ const configuration = {
     //if true, proxies {cid}.{ipfs/ipns}.IPFS_TARGET
     subdomainSupport:
       process.env.IPFS_SUBDOMAIN_SUPPORT === "true" ? true : false,
+    //ms before we give up and just return an ipns record
+    kubo_timeout_ms: parseInt(process.env.IPFS_KUBO_TIMEOUT_MS || "2500"),
+    //this has no default because we assume this isn't available
+    kubo_api_url: process.env.IPFS_KUBO_API_URL && new URL(process.env.IPFS_KUBO_API_URL) || undefined,
   },
   arweave: {
     backend: process.env.ARWEAVE_TARGET || "https://arweave.net",
@@ -46,18 +54,22 @@ const configuration = {
     ttl: parseInt(process.env.CACHE_TTL || "300"),
     purge: process.env.PURGE_CACHE_ON_START === "true" ? true : false,
     purge_count: parseInt(process.env.PURGE_CACHE_COUNT || "20000"),
-    purge_pattern: process.env.PURGE_CACHE_PATTERN || `*.${defaultHostname}`,
+    purge_pattern: process.env.PURGE_CACHE_PATTERN || `*.eth.limo`,
   },
   // Proxy
   router: {
     listen: process.env.LISTEN_PORT || 8888,
     origin: "LIMO Proxy",
-    host: defaultHost,
+    hostnameSubstitutionConfig: process.env.LIMO_HOSTNAME_SUBSTITUTION_CONFIG || JSON.stringify({
+      "eth.limo": "eth",
+      "eth.local": "eth",
+      "gno.limo": "gno",
+      "gno.local": "gno",
+    })
   },
   // Server ask endpoint
   ask: {
     listen: process.env.ASK_LISTEN_PORT || 9090,
-    host: defaultHost,
     enabled: process.env.ASK_ENABLED || "false",
     rate: {
       limit: Number(process.env.ASK_RATE_LIMIT ?? 10),
@@ -69,7 +81,6 @@ const configuration = {
   //dns-query isolated endpoint (DOH)
   dnsquery: {
     listen: process.env.DNSQUERY_LISTEN_PORT || 11000,
-    host: defaultHost,
     enabled: process.env.DNSQUERY_ENABLED === "false" ? false : true,
   },
   tests: {
@@ -130,11 +141,18 @@ export class TestConfigurationService implements IConfigurationService {
       return `https://socials.com?name=${ens}`
     };
     this.configuration.domainsapi.endpoint = "https://domainsapi"; //this needs to be set otherwise it will short circuit to not blacklisted
-    this.configuration.router.host = "asdf.local";
-    this.configuration.ask.host = "asdf.local";
     this.configuration.ask.rate.enabled = false;
-    this.configuration.ask.rate.limit = 99999;
-    this.configuration.ask.rate.period = 99999;
+    //the rate limiter being set to 2 ensures that any shared state between test cases causes a test failure explosion
+    //this is a good thing, as it means that debugging a bug in the test harness is easier
+    //the rate limiter is a good smell test for accidental shared state in the test harness because it's a state machine and there are definitely at least 2 cases that can hit it
+    //a bug in the test harness was discovered because there were tests that were erroring out due to rate limiting being triggered erroneously
+    //the problem was that beforeEach and afterEach weren't being called because mocha's 'it' wasn't getting a correct binding to the Mocha.Suite
+    //mocha relies on stateful access of Mocha.Suite (the thisvar in a 'describe' function) to do something similar to what our test harness does on top of Mocha
+    //for more information, look up why mocha doesn't support arrow functions and requires using regular `function (params) {}` blocks
+    this.configuration.ask.rate.limit = 2;
+    this.configuration.ask.rate.period = 30;
+    //we choose not to test with this because the default behavior for the kubo service is to die quickly and revert to the regular behavior where kubo is absent
+    this.configuration.ipfs.kubo_api_url = undefined;
   }
 
   get(): IConfiguration {

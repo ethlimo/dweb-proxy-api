@@ -6,7 +6,19 @@
     "additionalInfo": {}
   },
   {
-    "name": "fqdn-test-case.gov.kwenta.asdf.local",
+    "name": "blockranger.gno",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    "additionalInfo": {}
+  },
+  {
+    "name": "fqdn-test-case.gov.kwenta.eth.local",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    "additionalInfo": {}
+  },
+  {
+    "name": "fqdn-test-case.gov.kwenta.gno.local",
     "type": "ipfs",
     "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
     "additionalInfo": {}
@@ -57,6 +69,12 @@
     "name": "nick.eth",
     "type": "ipns",
     "contentHash": "ipns://12D3KooWAFU1jU7mks2z5F2RrLuRyMkcBw5sqcjsXjD753RNbnYs",
+    "additionalInfo": {}
+  },
+  {
+    "name": "wikipedia.eth",
+    "type": "ipns",
+    "contentHash": "ipns://en.wikipedia-on-ipfs.org",
     "additionalInfo": {}
   },
   {

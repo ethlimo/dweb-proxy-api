@@ -4,7 +4,9 @@ import { ensureTrailingSlash } from "../../utils";
 import { IConfigurationService } from "../../configuration";
 import { ILoggerService } from "../LoggerService";
 import { arweaveUrlToSandboxSubdomain } from "./arweave";
+import { IRequestContext } from "../lib";
 export const recordToProxyRecord = async (
+  request: IRequestContext,
   configurationSvc: IConfigurationService,
   logger: ILoggerService,
   record: NonNullable<Record>
@@ -23,12 +25,17 @@ export const recordToProxyRecord = async (
   } else if (record._tag === "Record") {
     if (record.codec === "ipfs-ns" || record.codec === "ipns-ns") {
       const url = new URL(configuration.ipfs.backend);
-      const urlSafeMethod = recordNamespaceToUrlHandlerMap[record.codec];
+      const urlSafeIpfsOrIpns = recordNamespaceToUrlHandlerMap[record.codec];
       var path = "/";
       if (configuration.ipfs.subdomainSupport) {
-        url.host = `${record.DoHContentIdentifier}.${urlSafeMethod}.${url.host}`;
+
+        let DoHContentIdentifier = record.DoHContentIdentifier;
+        if(record.codec === "ipns-ns") {
+          DoHContentIdentifier = normalizeUrlFragmentForIpfsSubdomainGateway(DoHContentIdentifier);
+        }
+        url.host = `${DoHContentIdentifier}.${urlSafeIpfsOrIpns}.${url.host}`;
       } else {
-        path = `/${urlSafeMethod}/${record.DoHContentIdentifier}/`;
+        path = `/${urlSafeIpfsOrIpns}/${record.DoHContentIdentifier}/`;
       }
       return {
         ...record,
@@ -41,6 +48,7 @@ export const recordToProxyRecord = async (
         ...record,
         XContentLocation: (
           await arweaveUrlToSandboxSubdomain(
+            request,
             logger,
             record.DoHContentIdentifier,
             backend,
@@ -64,3 +72,15 @@ export const recordToProxyRecord = async (
     return record;
   }
 };
+export function normalizeUrlFragmentForIpfsSubdomainGateway(DoHContentIdentifier: string): string {
+  return [...DoHContentIdentifier].map((c) => {
+    if(c == '.') {
+      return '-';
+    } else if(c == '-') {
+      return '--';
+    } else {
+      return c;
+    }
+  }).join("");
+}
+

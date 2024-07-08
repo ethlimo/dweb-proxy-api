@@ -5,11 +5,17 @@ import { IConfigurationService } from "../../configuration";
 
 type winstonLogger = ReturnType<typeof createLogger>;
 export type ILoggerService = {
-  error: (message: string, ctx?: any) => void;
-  warn: (message: string) => void;
-  info: (message: string) => void;
-  debug: (message: string) => void;
+  error: (message: string, context: ILoggerServiceContext) => void;
+  warn: (message: string, context: ILoggerServiceContext) => void;
+  info: (message: string, context: ILoggerServiceContext) => void;
+  debug: (message: string, context: ILoggerServiceContext) => void;
 };
+
+export type ILoggerServiceContext = {
+  origin: string;
+  trace_id: string;
+  context?: Object;
+}
 
 @injectable()
 export class LoggerService implements ILoggerService {
@@ -29,17 +35,25 @@ export class LoggerService implements ILoggerService {
     );
   }
 
-  public warn(msg: string) {
-    this._logger.warn(msg);
+  internal_log(severity: 'warn' | 'error' | 'info' | 'debug', msg: string, context: ILoggerServiceContext) {
+    this._logger.log({
+      level: severity,
+      message: msg,
+      ...context,
+    });
   }
-  public error(msg: string, ctx: any) {
-    this._logger.error(msg, ctx);
+
+  public warn(msg: string, context: ILoggerServiceContext) {
+    this.internal_log('warn', msg, context);
   }
-  public info(msg: string) {
-    this._logger.info(msg);
+  public error(msg: string, context: ILoggerServiceContext) {
+    this.internal_log('error', msg, context);
   }
-  public debug(msg: string) {
-    this._logger.debug(msg);
+  public info(msg: string, context: ILoggerServiceContext) {
+    this.internal_log('info', msg, context);
+  }
+  public debug(msg: string, context: ILoggerServiceContext) {
+    this.internal_log('debug', msg, context);
   }
 }
 
