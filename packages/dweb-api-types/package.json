@@ -1,0 +1,12 @@
+{
+    "name": "dweb-api-types",
+    "version": "1.0.0",
+    "description": "Shared type definitions for dweb-api",
+    "scripts": {
+        "fmt": "prettier src -w",
+        "build": "tsc"
+    },
+    "author": "eth.limo team",
+    "license": "MIT",
+    "type": "module"
+}

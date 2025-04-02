@@ -1,0 +1,10 @@
+{
+    "name": "bin",
+    "version": "1.0.0",
+    "description": "this only exists for json imports",
+    "type": "module",
+    "author": "Your Name",
+    "license": "MIT",
+    "dependencies": {
+    }
+}

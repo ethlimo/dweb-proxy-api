@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "exclude": [ ],
+  "include": [
+    "./src/**/*.ts"
+  ],
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "baseUrl": "./src",
+    "moduleResolution": "Bundler",
+    "module": "ES2022",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
+}

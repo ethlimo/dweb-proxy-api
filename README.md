@@ -1,10 +1,9 @@
-# [eth.limo](https://eth.limo) dWeb Gateway API
+# ENS dWeb Gateway API
 
-Backend service API for use with reverse proxies to deploy an HTTP [ENS](https://ens.domains) or [GNS](https://genomedomains.com/) gateway capable of resolving [IPFS](https://docs.ipfs.tech/), [IPNS](https://docs.ipfs.tech/how-to/publish-ipns/), [Arweave](https://www.arweave.org/), [Arweave Naming Service (ARNS)](https://docs.ar.io/arns/#overview), and [Swarm](https://www.ethswarm.org/) content.
+Backend service API for use with reverse proxies to deploy an HTTP [ENS](https://ens.domains)/[GNS](https://genomedomains.com/) gateway capable of resolving [IPFS](https://docs.ipfs.tech/), [IPNS](https://docs.ipfs.tech/how-to/publish-ipns/), [Arweave](https://www.arweave.org/), [Arweave Name System (ArNS)](https://docs.ar.io/arns/#overview), and [Swarm](https://www.ethswarm.org/) content.
 
-Upstream proxies can forward ENS and GNS hostnames for resolution and properly route them to the appropriate storage gateway path and destination via the following response headers:
+Upstream proxies can forward ENS and GNS hostnames for resolution and properly route them to the appropriate storage gateway path and destination via the following response headers (IPFS example below):
 
-IPFS example:
 ```
 X-Content-Location: ${cid}.ipfs.dweb.link
 X-Content-Path: /
@@ -15,17 +14,17 @@ __Gateway request flow__
 
 ![alt text](./images/flow.jpg "Example resolution and request data flow")
 
-### Configuration
+## Configuration
 
-| Environment Variable        | Default           | Purpose  |
+| Environment Variable        | Default           | Description  |
 | ------------- |:-------------:| -----:|
 | `LISTEN_PORT`     | `8888` | Proxy API listener port. |
-| `IPFS_SUBDOMAIN_SUPPORT`     | `"false"` | Return IPFS gateway destination in subdomain format, i.e. `${cid\|peerId}.${ipfs\|ipns}.dweb.link`. Otherwise results are returned as `dweb.link/ipfs/${cid}`. |
+| `IPFS_SUBDOMAIN_SUPPORT`     | `"false"` | Return IPFS gateway destination in subdomain format, i.e. `${cid\|peerId}.${ipfs\|ipns}.dweb.link`. Otherwise results are returned as `dweb.link/ipfs/${cid}`. Note that dweb.link is just an example and not a default value in this context. Please see `IPFS_TARGET` for more information.|
 | `IPFS_AUTH_KEY`     | `null` | Basic authentication for `IPFS_KUBO_API_URL`. |
 | `IPFS_KUBO_API_URL` | `undefined` | URL to Kubo `/api/v0/name/resolve` service. This setting performs IPNS name resolution and PeerId conversion to CIDv1 identifiers during the contentHash lookup process. Note, this does not enable or disable IPNS support (as this is performed by the IPFS backend) but rather attempts to use resolved CID values as cache keys as opposed to peerIds. Please read the official IPFS [documentation](https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-name-resolve) for more information. |
 | `ARWEAVE_TARGET`     | `"https://arweave.net"` | Arweave gateway FQDN. |
 | `SWARM_TARGET`     | `"https://api.gateway.ethswarm.org"` | Swarm gateway FQDN. |
-| `IPFS_TARGET` | `http://127.0.0.1:8080` | FQDN of IPFS gateway backend to use for requests. |
+| `IPFS_TARGET` | `http://localhost:8080` | FQDN of IPFS gateway backend to use for requests. |
 | `REDIS_URL`     | `"redis://127.0.0.1:6379"` | Redis server endpoint. |
 | `CACHE_TTL`     | `"300"`      |   TTL to persist resolved records |
 | `ASK_ENABLED` | `"false"`      |    Whether to spawn a special listener for responding to 
@@ -42,22 +41,31 @@ __Gateway request flow__
 | `PURGE_CACHE_ON_START` | `"false"` | Indicates whether to purge the entire Redis cache upon server startup. |
 | `PURGE_CACHE_COUNT` | `"20000"` | Number of keys to purge if `PURGE_CACHE_ON_START` is enabled. |
 | `PURGE_CACHE_PATTERN` | `"*.${DOMAIN_TLD_HOSTNAME}"` | Key pattern to purge if `PURGE_CACHE_ON_START` is enabled. |
+| `SW_BUNDLE_PUBLIC_URL` | `""` | Optional value if using service workers instead of the API. Set this to the parent wildcard domain you will be serving traffic from, i.e. setting this value to `eth.example.com` would support `ens.eth.example.com`, etc.  |
+| `SERVICE_WORKER_TRUSTLESS` | `"false"` | Optional value if using service workers instead of the API. Set this to `"true"` to enable [trustless IPFS gateway mode](https://specs.ipfs.tech/http-gateways/trustless-gateway/). You must also set `IPFS_TARGET` to the hostname of a gateway running in trustless mode.   |
 
-### Local Example
+## Quickstart
 
-1. Start Redis
-
-```
-podman run -p 127.0.0.1:6379:6379 docker.io/library/redis
-```
-
-2. Configure the necessary environment listed above
-
-3. Start dWeb Proxy API
+1. Start Redis (using any method)
 
 ```
-npm install
-npm run dev
+podman pull docker.io/library/redis
+podman run --net=host docker.io/library/redis
+```
+
+(Note you can also use `docker` instead of `podman`)
+
+2. Configure the necessary environment variables listed above
+
+3. Start the ENS dWeb Proxy API
+
+```
+./bin/build.sh
+
+# (optional) run test suites
+npm run test
+
+./bin/runDev.sh
 ```
 
 4. Make a request
@@ -76,7 +84,21 @@ Keep-Alive: timeout=5
 Transfer-Encoding: chunked
 ```
 
-__Use with Caddy server as a local gateway__
+### Container example
+
+```
+podman pull docker.io/library/redis
+podman run --net=host docker.io/library/redis
+
+buildah bud -t dweb-api-proxy .
+
+# Make sure to pass the necessary environment variables with "-e" flags
+podman run --rm -it --net=host -e "ETH_RPC_ENDPOINT=${ETH_RPC_ENDPOINT}" dweb-api-proxy
+```
+
+(Note you can also use `docker` instead of `buildah`)
+
+### Running a local gateway with Caddy server
 
 Start `dweb-proxy-api` with the correct environment variables and install [Caddy server](https://github.com/caddyserver/caddy).
 
@@ -151,3 +173,7 @@ For example, using `/etc/hosts`:
 ```
 
 Save the file, launch Caddy (`caddy run`) and then open a browser and navigate to `https://ens.eth:8443`.
+
+## Service Workers
+
+All static assets for supporting service worker resolution are located in `packages/dweb-api-serviceworker/dist`. We recommend using an HTTP server such as Caddy or Nginx to serve this content (any CDN will work as well). The `SW_BUNDLE_PUBLIC_URL` environment variable should be set to the domain you will be serving traffic from. For example, if you are serving traffic from `*.eth.example.com`, set `SW_BUNDLE_PUBLIC_URL` to `eth.example.com` in order to resolve `ens.eth.example.com`.
