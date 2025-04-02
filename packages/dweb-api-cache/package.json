@@ -1,0 +1,18 @@
+{
+    "name": "dweb-api-cache",
+    "version": "1.0.0",
+    "description": "Caching strategies for dweb-api-cache",
+    "scripts": {
+        "fmt": "prettier src -w",
+        "test": "mocha --exit",
+        "test:coverage": "nyc mocha --exit",
+        "build": "tsc"
+    },
+    "author": "eth.limo team",
+    "license": "MIT",
+    "dependencies": {
+        "dweb-api-serviceworker": "file:../dweb-api-serviceworker",
+        "dweb-api-types": "file:../dweb-api-types"
+    },
+    "type": "module"
+}
