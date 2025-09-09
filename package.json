@@ -46,6 +46,8 @@
     },
     "overrides": {
         "uint8arrays": "5.1.0",
-        "axios": "1.8.4"
+        "axios": "1.8.4",
+        "pg-protocol": "1.8.0",
+        "tmp": "0.2.5"
     }
 }

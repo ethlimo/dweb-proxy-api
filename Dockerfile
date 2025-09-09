@@ -1,5 +1,5 @@
 # Builder
-FROM node:20-bullseye-slim as build
+FROM node:20-bullseye-slim@sha256:0301ca331a12fbc04ba75c8b6f1e73a54e6f2704c4c68be7207f03703342ad87 as build
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ RUN apt-get update && \
 
 RUN ./bin/build.sh
 
-FROM gcr.io/distroless/nodejs20-debian12 as runtime
+FROM gcr.io/distroless/nodejs20-debian12@sha256:adce8f03e2b82454f0e36843879529ad8d2d1e6cc43ce26ff6124f04ab84a6cd as runtime
 
 LABEL org.opencontainers.image.source https://github.com/ethlimo/dweb-proxy-api
 
