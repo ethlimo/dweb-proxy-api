@@ -14,12 +14,35 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        # step-security/harden-runner@v2.13.2
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            registry.npmjs.org:443
+            malware-list.aikido.dev:443
+            npm.pkg.github.com:443
+            pkg-npm.githubusercontent.com:443      
       - name: Checkout the repo
-        uses: actions/checkout@v4
+        # actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - name: Set up Node.js 22.x
+        # actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444       
+        with:
+          node-version: '22' 
+      - name: Setup safe-chain
+        run: |
+          npm i -g @aikidosec/safe-chain
+          safe-chain setup-ci    
       - name: Build all dependencies
         id: build
         run: |
           ./bin/build.sh
+        env:
+          SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS: 48
       - name: Run Tests
         id: test
         run: |
