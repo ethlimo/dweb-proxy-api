@@ -30,6 +30,9 @@ jobs:
             org.opencontainers.image.title=dweb-proxy-api
             org.opencontainers.image.description=eth.limo dWeb Proxy API
             org.opencontainers.image.url=https://github.com/ethlimo/dweb-proxy-api
+      - name: Set up QEMU
+        # docker/setup-qemu-action@v3.7.0
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130            
       - name: Log in to GitHub Docker Registry
         uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
         with:
@@ -43,3 +46,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
