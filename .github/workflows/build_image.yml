@@ -6,13 +6,9 @@ on:
       - main
     paths:
       - 'Dockerfile'
-      - 'packages/*/tsconfig.json'
-      - 'packages/*/src/**'
-      - 'package.json'
-      - 'packages/*/package.json'
+      - 'packages/**'
       - '.github/workflows/build_image.yml'
       - '!packages/dweb-api-serviceworker/**'
-      - '!local-gateway/**'
     tags:
       - 'v*'
   workflow_dispatch:
