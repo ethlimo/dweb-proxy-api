@@ -14,6 +14,8 @@ RUN apt-get update && \
     useradd -u 10005 dwebapi && \
     tail -n 1 /etc/passwd >/etc/passwd.scratch
 
+ENV SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=48
+
 RUN ./bin/build.sh
 
 FROM gcr.io/distroless/nodejs20-debian12@sha256:adce8f03e2b82454f0e36843879529ad8d2d1e6cc43ce26ff6124f04ab84a6cd as runtime
