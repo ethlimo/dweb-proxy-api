@@ -4,8 +4,18 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Dockerfile'
+      - 'packages/*/tsconfig.json'
+      - 'packages/*/src/**'
+      - 'package.json'
+      - 'packages/*/package.json'
+      - '.github/workflows/build_image.yml'
+      - '!packages/dweb-api-serviceworker/**'
+      - '!local-gateway/**'
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   run:
@@ -15,6 +25,22 @@ jobs:
       contents: read
     runs-on: "ubuntu-latest"
     steps:
+      - name: Harden Runner
+        # step-security/harden-runner@v2.13.2
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            auth.docker.io:443
+            deb.debian.org:80
+            github.com:443
+            ghcr.io:443
+            malware-list.aikido.dev:443
+            npm.pkg.github.com:443
+            pkg-npm.githubusercontent.com:443
+            production.cloudflare.docker.com:443
+            registry-1.docker.io:443
+            registry.npmjs.org:443   
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Docker meta
