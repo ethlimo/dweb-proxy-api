@@ -112,17 +112,39 @@ export const recordToProxyRecord = async (
         overrideCodecHeader,
       };
     } else if (record.codec === "arweave-ns") {
-      const backend = new URL(arweaveConfig.getBackend());
+      const backendString = arweaveConfig.getBackend();
+      const backend = new URL(backendString);
+      
+      // Extract explicit port from original backend string
+      // Use lookahead to match port followed by /, ?, #, or end of string
+      let explicitPort: string | null = null;
+      const portMatch = backendString.match(/:(\d+)(?=\/|\?|#|$)/);
+      if (portMatch) {
+        explicitPort = portMatch[1];
+      }
+      
+      const resultUrl = await arweaveUrlToSandboxSubdomain(
+        request,
+        logger,
+        record.DoHContentIdentifier,
+        backend,
+      );
+      
+      // Manually construct XContentLocation to preserve explicit port
+      // Note: We cannot use url.port = explicitPort because the URL API
+      // automatically normalizes default ports (443 for https, 80 for http)
+      // The URL components (pathname, search, hash) are already properly encoded by the URL object
+      let xContentLocation: string;
+      if (explicitPort) {
+        // Preserve explicit port even if it's a default port
+        xContentLocation = `${resultUrl.protocol}//${resultUrl.hostname}:${explicitPort}${resultUrl.pathname}${resultUrl.search}${resultUrl.hash}`;
+      } else {
+        xContentLocation = resultUrl.toString();
+      }
+      
       return {
         ...record,
-        XContentLocation: (
-          await arweaveUrlToSandboxSubdomain(
-            request,
-            logger,
-            record.DoHContentIdentifier,
-            backend,
-          )
-        ).toString(),
+        XContentLocation: xContentLocation,
         XContentPath: ensureTrailingSlash("/" + record.DoHContentIdentifier),
       };
     } else if (record.codec === "swarm") {

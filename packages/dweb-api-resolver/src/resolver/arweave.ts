@@ -147,8 +147,9 @@ export const arweaveUrlToSandboxSubdomain = async (
     return arweave_gateway;
   }
 
+  // Modify hostname to add subdomain
   const url = new URL(arweave_gateway.toString());
-  url.host = subdomain + "." + url.host;
+  url.hostname = subdomain + "." + url.hostname;
 
   return url;
 };
