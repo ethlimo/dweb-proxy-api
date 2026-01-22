@@ -48,6 +48,7 @@ import { NameServiceFactory } from "dweb-api-resolver/dist/nameservice/index";
 import {} from "dweb-api-resolver/dist/resolver/index";
 import { Web3NameSdkService } from "dweb-api-resolver/dist/nameservice/Web3NameSdkService";
 import { EnsService } from "dweb-api-resolver/dist/nameservice/EnsService";
+import { BasenamesService } from "dweb-api-resolver/dist/nameservice/BasenamesService";
 
 export const createApplicationConfigurationBindingsManager = () => {
   const configuration = new EnvironmentBinding<ServerConfiguration>({
@@ -167,6 +168,12 @@ export const createApplicationConfigurationBindingsManager = () => {
     [EnvironmentConfiguration.Development]: (_env) => new TestResolverService(),
   });
 
+  const basenamesService = new EnvironmentBinding<INameService>({
+    [EnvironmentConfiguration.Production]: (env) =>
+      new BasenamesService(configuration.getBinding(env), logger.getBinding(env)),
+    [EnvironmentConfiguration.Development]: (_env) => new TestResolverService(),
+  });
+
   const domainRateLimit = new EnvironmentBinding<IDomainRateLimitService>({
     [EnvironmentConfiguration.Production]: (env) =>
       new DomainRateLimitService(
@@ -192,12 +199,14 @@ export const createApplicationConfigurationBindingsManager = () => {
         logger.getBinding(env),
         ensService.getBinding(env),
         web3NameSdk.getBinding(env),
+        basenamesService.getBinding(env),
       ),
     [EnvironmentConfiguration.Development]: (env) =>
       new NameServiceFactory(
         logger.getBinding(env),
         ensService.getBinding(env),
         web3NameSdk.getBinding(env),
+        basenamesService.getBinding(env),
       ),
   });
 
@@ -249,6 +258,7 @@ export const createApplicationConfigurationBindingsManager = () => {
     kuboApi,
     web3NameSdk,
     ensService,
+    basenamesService,
     domainRateLimit,
     arweaveResolver,
     nameServiceFactory,

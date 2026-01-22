@@ -6,6 +6,7 @@ import {
   IConfigurationEthereum,
   IConfigurationEthereumFailover,
   IConfigurationGnosis,
+  IConfigurationBase,
   ICacheConfig,
   IConfigurationIpfs,
   IConfigurationServerAsk,
@@ -36,6 +37,9 @@ const configuration = {
   },
   gnosis: {
     rpc: process.env.GNO_RPC_ENDPOINT || "https://rpc.gnosischain.com",
+  },
+  base: {
+    rpc: process.env.BASE_RPC_ENDPOINT || "https://mainnet.base.org",
   },
   // Storage backends
   ipfs: {
@@ -193,6 +197,10 @@ export class TestConfigurationService implements ServerConfiguration {
 
   getConfigGnosisBackend = () => {
     return this.getServerConfiguration().getConfigGnosisBackend();
+  };
+
+  getConfigBaseBackend = () => {
+    return this.getServerConfiguration().getConfigBaseBackend();
   };
 
   getCacheConfig = () => {
@@ -357,6 +365,20 @@ export const configurationToIConfigurationGnosis = (config: {
     getConfigGnosisBackend: () => {
       return {
         getBackend: () => config.gnosis.rpc,
+      };
+    },
+  };
+};
+
+export const configurationToIConfigurationBase = (config: {
+  base: {
+    rpc: string;
+  };
+}): IConfigurationBase => {
+  return {
+    getConfigBaseBackend: () => {
+      return {
+        getBackend: () => config.base.rpc,
       };
     },
   };
@@ -547,6 +569,7 @@ export type ServerConfiguration = IConfigurationServerRouter &
   IConfigurationEthereum &
   IConfigurationEthereumFailover &
   IConfigurationGnosis &
+  IConfigurationBase &
   ICacheConfig &
   IConfigurationServerDnsquery &
   IDomainQueryConfig &
@@ -567,6 +590,7 @@ export const configurationToServerConfiguration = (
     ...configurationToIConfigurationEthereum(config),
     ...configurationToIConfigurationEthereumFailover(config),
     ...configurationToIConfigurationGnosis(config),
+    ...configurationToIConfigurationBase(config),
     ...configurationToICacheConfig(config),
     ...configurationToIDomainQueryConfig(config),
     ...configurationToIRedisConfig(config),
