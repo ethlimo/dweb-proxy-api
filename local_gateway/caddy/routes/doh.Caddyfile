@@ -1,0 +1,15 @@
+# Snippet for DNS-over-HTTPS resolver
+&(doh) {
+	reverse_proxy {$DWEB_API_DOH_URL} {
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 5s
+			expect_continue_timeout 5s
+			read_timeout 5s
+			write_timeout 5s
+			compression off
+		}
+		header_up Host {$DWEB_API_DOH_URL}
+		rewrite {uri}
+	}
+}

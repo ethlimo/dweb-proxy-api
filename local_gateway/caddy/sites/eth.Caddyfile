@@ -1,0 +1,26 @@
+# Site block for ENS domains (match both .eth and .eth.localhost)
+*.eth.localhost *.eth {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	# DNS over HTTPS (this works for both ENS and Genome domains)
+	@dohRequest {
+		host dns.eth dns.eth.localhost
+		path /dns-query*
+	}
+
+	handle @dohRequest {
+		invoke doh
+	}
+
+	handle {
+		invoke dweb-proxy-api
+	}
+}

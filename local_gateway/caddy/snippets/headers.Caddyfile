@@ -1,0 +1,39 @@
+# Default headers for all responses
+# These are sane defaults but may need to be adjusted based on the use case
+(default-headers) {
+	header {
+		# CORS headers
+		Access-Control-Allow-Credentials "false"
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS, POST"
+		# Browser caching
+		Cache-Control "max-age=300, must-revalidate"
+		# Allow cross-origin resource sharing
+		Cross-Origin-Resource-Policy "cross-origin"
+		# Disable FLoC
+		Permissions-Policy "interest-cohort=()"
+		# Control referrer information sent
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Prevent MIME type sniffing
+		X-Content-Type-Options "nosniff"
+		# Additional iframing protections (may be redundant with CSP)
+		X-Frame-Options "SAMEORIGIN"
+		# Only allow framing from self
+		Content-Security-Policy "frame-ancestors 'self';"
+		# Legacy XSS protection
+		X-Xss-Protection "1; mode=block"
+	}
+
+	# Site-specific headers can be added here if needed
+	# Example: enable COOP and COEP for WASM applications
+
+	# COOP and COEP headers
+	#@WasmHeaders {
+	#	expression {host}.contains("domain.eth")
+	#}
+
+	#header @WasmHeaders {
+	#	Cross-Origin-Embedder-Policy "credentialless"
+	#	Cross-Origin-Opener-Policy "same-origin"
+	#}
+}

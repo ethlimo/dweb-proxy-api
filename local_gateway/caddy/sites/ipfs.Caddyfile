@@ -1,0 +1,25 @@
+# Site block for local IPFS subdomain gateway
+*.ipfs.localhost *.ipfs *.ipns.localhost *.ipns {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$IPFS_GATEWAY_HOST}
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+
+		handle @https_upstream {
+			invoke ipfs-gateway-https
+		}
+
+		handle {
+			invoke ipfs-gateway-http
+		}
+	}
+}

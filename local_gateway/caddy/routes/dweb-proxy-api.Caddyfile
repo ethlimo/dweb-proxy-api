@@ -1,0 +1,93 @@
+# Snippet for dweb-proxy-api (resolves ENS and Genome domains)
+# This is the primary request router for dWebsite resolution
+# request -> dweb-proxy-api -> select HTTP/HTTPS upstream based on X-Content-Location header -> gateway destination
+&(dweb-proxy-api) {
+	# Resolve ENS/Genome domain(s) and return X-Content-Location and X-Content-Path headers for constructing gateway request
+	# X-Content-Location: the base FQDN of the gateway to use (with port)
+	# X-Content-Path: the path prefix to use when rewriting the request URI
+	# {$DWEB_API_URL} is set in the docker-compose.yml environment variables.
+	reverse_proxy {$DWEB_API_URL} {
+		transport http {
+			dial_timeout 30s
+			response_header_timeout 30s
+			expect_continue_timeout 30s
+			read_timeout 30s
+			write_timeout 30s
+			compression off
+		}
+
+		method GET
+		# Strip any parent domain labels, i.e. domain.eth.localhost -> domain.eth
+		header_up Host ([a-z0-9.-]+\.(?:eth|gno)) $1
+
+		# Matcher for HTTPS upstreams based on X-Content-Location header
+		@use_https {
+			status 200
+			header X-Content-Location *:443
+		}
+
+		# Catch all for non-HTTPS upstreams
+		@use_http status 200
+
+		# Handler for HTTPS upstreams based on X-Content-Location header
+		handle_response @use_https {
+			@trailing vars_regexp trailing {rp.header.X-Content-Path} ^(.*)/$
+
+			# Proxy request to the gateway specified in X-Content-Location header
+			# This handles double // issues when X-Content-Path ends with /, i.e. /ipfs/bafy/
+			reverse_proxy @trailing {rp.header.X-Content-Location} {
+				# Rewrite the proxy URI to include X-Content-Path and preserve original request URI
+				rewrite {re.trailing.1}{uri}
+				# Explicitly set Host header to the X-Content-Location value, i.e. bafy.ipfs.dweb.link:443
+				header_up Host {rp.header.X-Content-Location}
+				# Strip leaky headers
+				header_up -X-Forwarded-Host
+				header_up -X-Forwarded-For
+
+				transport http {
+					# Use TLS for this upstream
+					tls
+					dial_timeout 30s
+					response_header_timeout 30s
+					expect_continue_timeout 30s
+					read_timeout 30s
+					write_timeout 30s
+					tls_timeout 30s
+				}
+
+				# Gracefully handle 3xx redirects from upstream
+				# i.e. wikipage.eth/wiki/IBM -> wikipage.eth/wiki/IBM/
+				@redirect3xx status 3xx
+				handle_response @redirect3xx {
+					redir {rp.header.Location} permanent
+				}
+			}
+		}
+
+		# Router for HTTP upstreams based on X-Content-Location header
+		# Otherwise the configuration is identical to the HTTPS handler above
+		handle_response @use_http {
+			@trailing vars_regexp trailing {rp.header.X-Content-Path} ^(.*)/$
+
+			reverse_proxy @trailing {rp.header.X-Content-Location} {
+				rewrite {re.trailing.1}{uri}
+				header_up Host {rp.header.X-Content-Location}
+				header_up -X-Forwarded-Host
+
+				transport http {
+					# No TLS for this upstream
+					dial_timeout 30s
+					response_header_timeout 30s
+					expect_continue_timeout 30s
+					read_timeout 30s
+					write_timeout 30s
+				}
+
+				@redirect3xx status 3xx
+				handle_response @redirect3xx {
+					redir {rp.header.Location} permanent
+				}
+			}
+		}
+	}
+}
