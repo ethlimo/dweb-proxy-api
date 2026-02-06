@@ -98,81 +98,9 @@ podman run --rm -it --net=host -e "ETH_RPC_ENDPOINT=${ETH_RPC_ENDPOINT}" dweb-ap
 
 (Note you can also use `docker` instead of `buildah`)
 
-### Running a local gateway with Caddy server
+### Running a local gateway
 
-Start `dweb-proxy-api` with the correct environment variables and install [Caddy server](https://github.com/caddyserver/caddy).
-
-Use the following `Caddyfile` configuration (localhost example):
-
-```
-{
-	admin off
-	auto_https off
-
-	local_certs
-
-	log {
-		level DEBUG
-		format console
-	}
-}
-
-&(dweb-api) {
-	reverse_proxy localhost:8888 {
-		transport http
-
-		method GET
-		header_up Host (.*[-a-z0-9]+\.eth) $1
-
-		@proxy status 200
-		handle_response @proxy {
-			@trailing vars_regexp trailing {rp.header.X-Content-Path} ^(.*)/$
-			reverse_proxy @trailing {rp.header.X-Content-Location} {
-				rewrite {re.trailing.1}{uri}
-				header_up Host {rp.header.X-Content-Location}
-				header_up -X-Forwarded-Host
-
-				transport http {
-					dial_timeout 2s
-				}
-
-				@redirect301 status 301
-				handle_response @redirect301 {
-					redir {rp.header.Location} permanent
-				}
-			}
-		}
-	}
-}
-
-:8443 {
-	log {
-		level INFO
-		format console
-	}
-
-	bind 0.0.0.0
-
-	tls internal {
-		on_demand
-	}
-
-	invoke dweb-api
-}
-```
-
-You can use this `Caddyfile` as a starting point for more advanced configurations, however this is sufficient for use as a local gateway (you may wish to use port 443 instead of 8443).
-
-Depending on your environment, either edit `/etc/hosts` or configure a stub-resolver for `systemd-resolved` (this will let you route all `eth.` queries to your local gateway).
-
-For example, using `/etc/hosts`:
-
-```
-127.0.0.1   localhost ens.eth
-::1         localhost ens.eth
-```
-
-Save the file, launch Caddy (`caddy run`) and then open a browser and navigate to `https://ens.eth:8443`.
+Please see the [local gateway README](./local_gateway/README.md) for instructions on how to run your own fully local ENS/dWeb gateway instance.
 
 ## Service Workers
 
