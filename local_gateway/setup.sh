@@ -17,7 +17,7 @@ else
 fi
 
 printf "Starting local dWeb gateway (using %s)...\n\n" "${COMPOSE_CMD}"
-${COMPOSE_CMD} up -d >/dev/null 2>&1
+${COMPOSE_CMD} up -d
 
 printf "Waiting for CA certificate to be generated...\n"
 timeout=30
