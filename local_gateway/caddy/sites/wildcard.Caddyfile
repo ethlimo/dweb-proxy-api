@@ -1,0 +1,17 @@
+# Site block for N-level subdomains not matched by wildcard blocks above (on-demand TLS for both *.eth and *.gno)
+https:// {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	import default-headers
+
+	tls internal {
+		on_demand
+	}
+
+	invoke dweb-proxy-api
+}

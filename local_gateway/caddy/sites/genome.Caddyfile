@@ -1,0 +1,14 @@
+# Site block for Genome domains (match both .gno and .gno.localhost)
+*.gno.localhost *.gno {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	tls internal
+	encode gzip zstd
+	import default-headers
+
+	invoke dweb-proxy-api
+}

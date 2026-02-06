@@ -1,0 +1,25 @@
+# Site block for local Arweave gateway (subdomains and path based)
+*.arweave.localhost arweave.localhost {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$ARWEAVE_GATEWAY_HOST}
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+
+		handle @https_upstream {
+			invoke arweave-gateway-https
+		}
+
+		handle {
+			invoke arweave-gateway-http
+		}
+	}
+}

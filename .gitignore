@@ -11,3 +11,6 @@ dist
 
 #arweave warpdb cache
 warpdb
+
+# local-gateway
+./local_gateway/data
