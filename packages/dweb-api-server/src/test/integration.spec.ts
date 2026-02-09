@@ -41,6 +41,7 @@ type HarnessType = {
   hostnameSubstitionService: IHostnameSubstitutionService;
   testEnsService: TestResolverService;
   web3NameSdkService: TestResolverService;
+  testBasenamesService: TestResolverService;
   testArweaveResolverService: TestResolverService;
   testDomainQuerySuperagentService: TestDomainQuerySuperagentService;
   domainQueryService: IDomainQueryService;
@@ -69,6 +70,9 @@ let buildAppContainer = (): HarnessType => {
       EnvironmentConfiguration.Development,
     ) as TestResolverService,
     web3NameSdkService: services.web3NameSdk.getBinding(
+      EnvironmentConfiguration.Development,
+    ) as TestResolverService,
+    testBasenamesService: services.basenamesService.getBinding(
       EnvironmentConfiguration.Development,
     ) as TestResolverService,
     testArweaveResolverService: services.arweaveResolver.getBinding(
@@ -225,11 +229,14 @@ const harness =
     const resolvers = [
       harnessInput.testEnsService,
       harnessInput.web3NameSdkService,
+      harnessInput.testBasenamesService,
     ];
 
     var theRealTestResolverService: TestResolverService;
 
-    if (nameResolvedToEnsName.endsWith("eth")) {
+    if (nameResolvedToEnsName.endsWith(".base.eth")) {
+      theRealTestResolverService = harnessInput.testBasenamesService;
+    } else if (nameResolvedToEnsName.endsWith("eth")) {
       theRealTestResolverService = harnessInput.testEnsService;
     } else if (nameResolvedToEnsName.endsWith("gno")) {
       theRealTestResolverService = harnessInput.web3NameSdkService;
