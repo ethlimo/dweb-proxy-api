@@ -632,6 +632,70 @@ describe("Proxy API Integration Tests", function () {
     expect(res.header("x-content-path")).to.equal("/");
     expect(res.header("x-content-storage-type")).to.equal("ipns-ns");
   });
+
+  it("should preserve port in X-Content-Location for arweave with explicit port", async () => {
+    // Set arweave backend with explicit non-default port
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://arweave.net:8443";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:8443",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
+
+  it("should preserve explicit default port 443 in X-Content-Location for arweave", async () => {
+    // Set arweave backend with explicit default port 443
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://arweave.net:443";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:443",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
 });
 
 describe("Caddy API Integration Tests", function () {

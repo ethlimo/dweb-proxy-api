@@ -1,0 +1,26 @@
+# Root Caddyfile
+{
+	admin off
+
+	# Use Caddy's local CA for TLS certificates
+	local_certs
+
+	log {
+		level DEBUG
+		format console
+	}
+}
+
+# Import snippets and named routes
+import ./routes/dweb-proxy-api.Caddyfile
+import ./routes/doh.Caddyfile
+import ./routes/storage-gateways.Caddyfile
+import ./snippets/headers.Caddyfile
+
+# Import site blocks
+import ./sites/eth.Caddyfile
+import ./sites/genome.Caddyfile
+import ./sites/wildcard.Caddyfile
+import ./sites/ipfs.Caddyfile
+import ./sites/arweave.Caddyfile
+import ./sites/swarm.Caddyfile

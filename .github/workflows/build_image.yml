@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Dockerfile'
+      - 'packages/**'
+      - '!packages/dweb-api-serviceworker/**'
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   run:
@@ -15,6 +20,22 @@ jobs:
       contents: read
     runs-on: "ubuntu-latest"
     steps:
+      - name: Harden Runner
+        # step-security/harden-runner@v2.13.2
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            auth.docker.io:443
+            deb.debian.org:80
+            gcr.io:443
+            ghcr.io:443
+            github.com:443
+            malware-list.aikido.dev:443
+            production.cloudflare.docker.com:443
+            registry-1.docker.io:443
+            registry.npmjs.org:443
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Docker meta
@@ -30,6 +51,12 @@ jobs:
             org.opencontainers.image.title=dweb-proxy-api
             org.opencontainers.image.description=eth.limo dWeb Proxy API
             org.opencontainers.image.url=https://github.com/ethlimo/dweb-proxy-api
+      - name: Set up QEMU
+        # docker/setup-qemu-action@v3.7.0
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130    
+      - name: Set up Docker Buildx
+        # docker/setup-buildx-action@v3.12.0
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f        
       - name: Log in to GitHub Docker Registry
         uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
         with:
@@ -43,3 +70,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64

@@ -1,0 +1,345 @@
+# docker-compose.yml
+
+services:
+  # HTTP ingress router/proxy for all services
+  ingress:
+    # https://hub.docker.com/layers/library/caddy/2.11/
+    image: docker.io/library/caddy:2.11@sha256:ab7fee37306738d197c627fe4ef40968bc085d0de28aae43cfa5273556d8445f
+    entrypoint: ["/bin/sh", "/etc/caddy/custom-entrypoint.sh"]
+    pull_policy: missing
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # Primary resolver API. This must be formatted as ${service_name}:${LISTEN_PORT}
+      - "DWEB_API_URL=${DWEB_API_URL:-http://dweb-proxy-api:8888}"
+      # This is the DNS-over-HTTPS endpoint for dweb-proxy-api. It must be formatted as ${service_name}:${DNSQUERY_LISTEN_PORT}
+      - "DWEB_API_DOH_URL=${DWEB_API_DOH_URL:-http://dweb-proxy-api:11000}"
+      - IPFS_GATEWAY_HOST=rainbow:8090
+      - ARWEAVE_GATEWAY_HOST=wayfinder:3000
+      - SWARM_GATEWAY_HOST=bee:1633
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - ./data:/data:Z777
+      - caddy_config:/config
+      - ./dns/resolv.conf:/etc/resolv.conf:ro
+      - ./caddy/custom-entrypoint.sh:/custom-entrypoint.sh:ro
+      - shared_ca:/shared-ca      
+    tmpfs:
+      - /tmp
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.52
+    cap_drop:
+      - ALL
+    cap_add:
+      - CAP_NET_BIND_SERVICE
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    depends_on:
+      dweb-proxy-api:
+        condition: service_started
+      wildcard-dns:
+        condition: service_started
+    restart: unless-stopped
+    dns:
+      - 172.20.0.57
+    dns_search: []
+
+  # https://github.com/ethlimo/dweb-proxy-api
+  dweb-proxy-api:
+    # https://github.com/ethlimo/dweb-proxy-api/pkgs/container/dweb-proxy-api
+    image: ghcr.io/ethlimo/dweb-proxy-api:main@sha256:105f1858727592cb1b869feb8bb37d7168d4acd354f6d3e78a29b22e6936ca43
+    pull_policy: missing
+    build:
+      context: .
+    environment:
+      # Main resolver API listen port
+      - LISTEN_PORT=8888
+      # Redis connection URL
+      - REDIS_URL=redis://redis:6379
+      # Ethereum RPC endpoint
+      - ETH_RPC_ENDPOINT=${ETH_RPC_ENDPOINT:-https://ethereum.publicnode.com}
+      # Enable IPFS subdomain support, i.e. bafy.ipfs.rainbow:8090
+      - IPFS_SUBDOMAIN_SUPPORT=true
+      # IPFS gateway target URL
+      - IPFS_TARGET=http://rainbow:8090
+      # Arweave gateway target URL
+      - ARWEAVE_TARGET=http://wayfinder:3000
+      # Swarm gateway target URL
+      - SWARM_TARGET=http://bee:1633
+      # How long to keep domain resolution results cached (in seconds)
+      - CACHE_TTL=${CACHE_TTL:-300}
+      # HTTPS ingress certificate issuance check (not required for local environments)
+      #- ASK_ENABLED=${ASK_ENABLED:-true}
+      #- ASK_LISTEN_PORT=${ASK_LISTEN_PORT:-9090}
+      # Enable DNS-over-HTTPS API
+      - DNSQUERY_ENABLED=${DNS_QUERY_ENABLED:-true}
+      - DNSQUERY_LISTEN_PORT=${DNSQUERY_LISTEN_PORT:-11000}
+      # Gnosis Chain RPC endpoint
+      - GNO_RPC_ENDPOINT=${GNO_RPC_ENDPOINT:-https://rpc.gnosischain.com}
+      # Default: {"eth.localhost": "eth", "gno.localhost": "gno"} - must be a base64-encoded JSON object
+      - LIMO_HOSTNAME_SUBSTITUTION_CONFIG=${LIMO_HOSTNAME_SUBSTITUTION_CONFIG:-eyJldGgubG9jYWxob3N0IjogImV0aCIsICJnbm8ubG9jYWxob3N0IjogImdubyJ9}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.53
+    cap_drop:
+      - ALL
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    depends_on:
+      - redis
+    restart: unless-stopped
+    expose:
+      # dweb-proxy-api resolver API
+      - "8888"
+      # DNS-over-HTTPS
+      - "11000"
+      # /ask endpoint for certificate issuance
+      - "9090"
+      # DataURI endpoint
+      - "12500"
+
+  redis:
+    # https://hub.docker.com/layers/library/redis
+    image: docker.io/library/redis:7.4@sha256:d665ad9dd15a25c100b77134516d4f9f46f06884983d86456f0a9c0434f3b49f
+    pull_policy: missing
+    volumes:
+      - redis_data:/data
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.54
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    restart: unless-stopped
+    expose:
+      - "6379"
+
+  # https://github.com/ipfs/rainbow
+  rainbow:
+    # https://github.com/ipfs/rainbow/pkgs/container/rainbow
+    image: ghcr.io/ipfs/rainbow:main-latest@sha256:97b2ff556be442747450af76271de332ba0ed700d78f55adebd5df0bd1fb2af0
+    pull_policy: missing
+    environment:
+      - RAINBOW_SUBDOMAIN_GATEWAY_DOMAINS=rainbow,localhost
+      - RAINBOW_BLOCKSTORE_PATH=/data/blockstore
+      - RAINBOW_HTTP_ROUTERS=${RAINBOW_HTTP_ROUTERS:-https://delegated-ipfs.dev,https://indexer.pinata.cloud,https://cid.contact}
+      - RAINBOW_GATEWAY_LISTEN_ADDRESS=0.0.0.0:8090
+      - 'RAINBOW_DNSLINK_RESOLVERS=eth. : https://dns.eth/dns-query'
+      - SSL_CERT_FILE=/etc/ssl/custom/certs/ca-certificates-combined.crt
+    entrypoint: ["/bin/sh", "/opt/local/custom-entrypoint.sh"]      
+    volumes:
+      - rainbow_data:/data
+      - shared_ca:/shared-ca:ro
+      - ./ipfs/custom-entrypoint.sh:/opt/local/custom-entrypoint.sh:ro
+      - ./dns/resolv.conf:/etc/resolv.conf:ro 
+    tmpfs:
+        # Permissions might need to be reduced but this works around root ownership issues
+        - /etc/ssl/custom:mode=777
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.55
+    cap_drop:
+      - ALL
+    cap_add:
+      - CAP_NET_BIND_SERVICE
+    read_only: true
+    depends_on:
+      ingress:
+        condition: service_started
+      wildcard-dns:
+        condition: service_started 
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2g
+        reservations:
+          cpus: '0.50'
+          memory: 512M        
+    restart: unless-stopped
+    expose:
+      - "8090"
+    dns:
+      - 172.20.0.57
+    dns_search: []      
+
+  wayfinder:
+    image: ar.io/wayfinder-router:main-latest
+    build:
+      context: https://github.com/vilenarios/wayfinder-router.git#main
+      dockerfile: Dockerfile
+    volumes:
+      - wayfinder_data:/app:rw 
+    environment:
+      - ARNS_ROOT_HOST=wayfinder
+      - NODE_ENV=${NODE_ENV:-production}
+      - BASE_DOMAIN=wayfinder:3000
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.58
+    cap_drop:
+      - ALL
+    read_only: true
+    depends_on:
+      ingress:
+        condition: service_started
+      wildcard-dns:
+        condition: service_started
+    # Override image defined healthcheck
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M      
+    restart: unless-stopped
+    expose:
+      - "3000"
+    dns:
+      - 172.20.0.57
+    dns_search: []
+
+  bee:
+    image: ethersphere/bee:2.6.0@sha256:b0954744867aa84c7e765aa98c5d3720cf6f94ba6ae9b657e4da06b996ea9d65
+    #image: ethersphere/swarm/bee:main-latest
+    #build:
+    #  context: https://github.com/ethersphere/bee.git
+    #  dockerfile: Dockerfile
+    volumes:
+      - bee_data:/home/bee:rw
+    command: start
+    environment:
+      - BEE_FULL_NODE="false"
+      - BEE_SWAP_ENABLE="false"
+      - BEE_PASSWORD="correct horse battery staple"
+      - BEE_SKIP_POSTAGE_SNAPSHOT=true
+      - BEE_API_ADDR=0.0.0.0:1633
+      - BEE_RESOLVER_OPTIONS=${ETH_RPC_ENDPOINT:-https://ethereum.publicnode.com}
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.59
+    cap_drop:
+      - ALL
+    read_only: true
+    depends_on:
+      ingress:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M        
+    restart: unless-stopped
+    expose:
+      - "1633"
+      - "1634"
+    dns:
+      - 172.20.0.57
+    dns_search: []
+
+  # TODO add native .eth DNS resolution for OS clients without needing .localhost suffix
+  #dnsmasq:
+    # https://hub.docker.com/layers/dockurr/dnsmasq/2.91
+  #  image: docker.io/library/dockurr/dnsmasq:2.9.1@sha256:220fa3070013930a690ecc86c625f5b94152abfd178862b0da076428cd2ecf49
+  #  profiles: [dns]
+  #  command:
+  #    - --address=/eth/127.0.0.1
+  #    - --no-resolv
+  #    - --no-hosts
+  #    - --log-queries
+  #  ports:
+  #    - "127.0.0.1:5353:53/udp"
+  #  networks:
+  #    gateway:
+  #      ipv4_address: 172.20.0.56
+  #  cap_drop:
+  #    - ALL
+  #  cap_add:
+  #    - CAP_NET_BIND_SERVICE 
+  #  read_only: true
+  #  cpu_percent: 5      
+  #  mem_limit: 256m      
+  #  restart: unless-stopped
+
+  # Wildcard DNS for subdomain resolution within the network namespace
+  wildcard-dns:
+    image: dockurr/dnsmasq:2.91@sha256:7873ce2dae1b0aa51d2c13dd4bd3aad47890c233088b3c7f6eb099a01e6e4307
+    ports:
+      - "53/udp"
+      - "53/tcp"
+    volumes:
+      - ./dns/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    cap_drop:
+      - ALL
+    cap_add:
+      - CAP_NET_BIND_SERVICE 
+    networks:
+      gateway:
+        ipv4_address: 172.20.0.57
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M        
+    restart: unless-stopped
+
+networks:
+  gateway:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  redis_data:
+  rainbow_data:
+  wayfinder_data:
+  bee_data:
+  swarm_data:
+  caddy_config:
+  shared_ca:
+

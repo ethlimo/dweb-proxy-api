@@ -1,0 +1,53 @@
+# Site block for local Swarm (bzz) gateway
+*.swarm.localhost {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$SWARM_GATEWAY_HOST}
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+		rewrite * /bzz/{labels.2}{uri}
+
+		handle @https_upstream {
+			invoke swarm-gateway-https
+		}
+
+		handle {
+			invoke swarm-gateway-http
+		}
+	}
+}
+
+# Site block for local Swarm (bzz) gateway without localhost suffix
+*.swarm {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$SWARM_GATEWAY_HOST}
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+		rewrite * /bzz/{labels.1}{uri}
+
+		handle @https_upstream {
+			invoke swarm-gateway-https
+		}
+
+		handle {
+			invoke swarm-gateway-http
+		}
+	}
+}
