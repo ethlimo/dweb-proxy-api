@@ -27,7 +27,7 @@
   "type": "module",
   "dependencies": {
     "@helia/http": "^1.0.10",
-    "@helia/verified-fetch": "^1.5.0",
+    "@helia/verified-fetch": "^7.0.0",
     "@sgtpooki/file-type": "^1.0.1",
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",
