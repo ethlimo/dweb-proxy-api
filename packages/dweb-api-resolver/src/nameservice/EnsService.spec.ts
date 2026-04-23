@@ -1,4 +1,3 @@
-import "@ensdomains/ethers-patch-v6";
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { EnsResolver, JsonRpcProvider } from "ethers";
