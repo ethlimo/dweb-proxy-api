@@ -1,9 +1,9 @@
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
-import { EnsResolver, JsonRpcProvider } from "ethers";
+import { EnsResolver } from "ethers";
 import { createStubInstance } from "sinon";
 import { LoggerService } from "dweb-api-logger/dist/index.js";
-import { getEnsContentHash } from "./EnsService.js";
+import { EnsService } from "./EnsService.js";
 
 const RPC_URL =
   process.env.ETH_RPC_ENDPOINT ?? "https://ethereum.publicnode.com";
@@ -11,12 +11,16 @@ const RPC_URL =
 const NAME = "ur.integration-tests.eth";
 const request = { trace_id: "TEST_TRACE_ID" };
 
+const config = {
+  getConfigEthereumBackend: () => ({ getBackend: () => RPC_URL }),
+};
+
 describe("ENSv2 patch", function () {
-  let provider: JsonRpcProvider;
+  let service: EnsService;
   const logger = createStubInstance(LoggerService);
 
   before(function () {
-    provider = new JsonRpcProvider(RPC_URL);
+    service = new EnsService(config, logger);
   });
 
   it("patches EnsResolver.fromName and preserves fromNameOld", function () {
@@ -25,7 +29,7 @@ describe("ENSv2 patch", function () {
   });
 
   it("resolves content hash via Universal Resolver (patched)", async function () {
-    const contentHash = await getEnsContentHash(request, provider, logger, NAME);
+    const contentHash = await service.getContentHash(request, NAME);
     expect(contentHash).to.equal(
       "ipfs://Qmaisz6NMhDB51cCvNWa1GMS7LU1pAxdF4Ld6Ft9kZEP2a",
     );
@@ -35,7 +39,7 @@ describe("ENSv2 patch", function () {
     const patched = EnsResolver.fromName;
     EnsResolver.fromName = (EnsResolver as any).fromNameOld;
     try {
-      const contentHash = await getEnsContentHash(request, provider, logger, NAME);
+      const contentHash = await service.getContentHash(request, NAME);
       expect(contentHash).to.be.null;
     } finally {
       EnsResolver.fromName = patched;
