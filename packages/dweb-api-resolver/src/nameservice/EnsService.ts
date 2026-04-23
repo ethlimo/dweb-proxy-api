@@ -8,7 +8,7 @@ import {
   IConfigurationEthereumFailover,
 } from "dweb-api-types/dist/config";
 import { getContentHashFallback } from "./utils.js";
-const getEnsContentHash = async (
+export const getEnsContentHash = async (
   request: IRequestContext,
   provider: AbstractProvider,
   logger: ILoggerService,
