@@ -1,3 +1,4 @@
+import "@ensdomains/ethers-patch-v6";
 import { FallbackProvider, JsonRpcProvider, AbstractProvider } from "ethers";
 import { ILoggerService } from "dweb-api-types/dist/logger";
 import { IRequestContext } from "dweb-api-types/dist/request-context";
