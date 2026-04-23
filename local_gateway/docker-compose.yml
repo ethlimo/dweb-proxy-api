@@ -194,7 +194,7 @@ services:
   wayfinder:
     image: ar.io/wayfinder-router:main-latest
     build:
-      context: https://github.com/vilenarios/wayfinder-router.git#main
+      context: https://github.com/ar-io/wayfinder-router.git#bdc7912e1b62e7dc5c8ca5678b0211238d028137
       dockerfile: Dockerfile
     volumes:
       - wayfinder_data:/app:rw 
