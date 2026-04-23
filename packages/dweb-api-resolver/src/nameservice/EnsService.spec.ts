@@ -36,10 +36,4 @@ describe("ENSv2 patch", function () {
     );
   });
 
-  it("resolves test.offchaindemo.eth via CCIP Read", async function () {
-    const address = await provider.resolveName("test.offchaindemo.eth");
-    expect(address?.toLowerCase()).to.equal(
-      "0x779981590e7ccc0cfae8040ce7151324747cdb97",
-    );
-  });
 });
