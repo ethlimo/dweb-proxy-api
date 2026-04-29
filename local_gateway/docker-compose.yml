@@ -56,7 +56,7 @@ services:
   # https://github.com/ethlimo/dweb-proxy-api
   dweb-proxy-api:
     # https://github.com/ethlimo/dweb-proxy-api/pkgs/container/dweb-proxy-api
-    image: ghcr.io/ethlimo/dweb-proxy-api:main@sha256:105f1858727592cb1b869feb8bb37d7168d4acd354f6d3e78a29b22e6936ca43
+    image: ghcr.io/ethlimo/dweb-proxy-api:main@sha256:df7b7e117640433647a04ff7e69ddd398d4de3a571646f9d7e16b59b42962d57
     pull_policy: missing
     build:
       context: .
