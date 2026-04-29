@@ -1,6 +1,11 @@
-import { INameService } from "dweb-api-types/dist/name-service.js";
-import { IArweaveResolver } from "dweb-api-types/dist/arweave.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
+import {
+  DecodedCodecString,
+  DecodedDataUri,
+  DecodedDataUrl,
+  INameService,
+} from "dweb-api-types/name-service";
+import { IArweaveResolver } from "dweb-api-types/arweave";
+import { IRequestContext } from "dweb-api-types/request-context";
 
 export class TestResolverService implements INameService, IArweaveResolver {
   mappings = new Map<
@@ -40,7 +45,7 @@ export class TestResolverService implements INameService, IArweaveResolver {
   getContentHash(
     _request: IRequestContext,
     name: string,
-  ): Promise<string | null> {
+  ): Promise<DecodedCodecString | DecodedDataUri | DecodedDataUrl | null> {
     const res = this.mappings.get(name);
     if (res === undefined) {
       throw new Error(`TestResolverService: no mapping for ${name}`);
@@ -49,12 +54,21 @@ export class TestResolverService implements INameService, IArweaveResolver {
       return new Promise((resolve) => resolve(null));
     }
     if (typeof res === "string") {
-      return new Promise((resolve) => resolve(res));
+      return new Promise((resolve) =>
+        resolve({
+          _tag: "DecodedCodecString",
+          codec: res,
+        }),
+      );
     }
     throw new Error(res.reason);
   }
 
   set(name: string, value: string | null | { error: true; reason: string }) {
     this.mappings.set(name, value);
+  }
+
+  getChainId(): number {
+    return 100;
   }
 }

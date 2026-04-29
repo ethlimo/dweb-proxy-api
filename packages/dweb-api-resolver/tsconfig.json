@@ -6,9 +6,6 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "baseUrl": "./src",
-    "moduleResolution": "bundler",
-    "module": "ES2022",
     "skipLibCheck": true
   },
 }

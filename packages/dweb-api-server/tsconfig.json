@@ -1,15 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
-  "exclude": [ ],
   "include": [
     "./src/**/*.ts"
+  ],
+  "exclude": [
+    "./src/**/*.spec.*"
   ],
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "baseUrl": "./src",
-    "moduleResolution": "Bundler",
-    "module": "ES2022",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "target": "ES2022",

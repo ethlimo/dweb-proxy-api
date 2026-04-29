@@ -7,24 +7,24 @@ import type {
   IConfigurationIpfs,
   IConfigurationLogger,
   IConfigurationSwarm,
-} from "dweb-api-types/dist/config.js";
-import { JsonLoggerService } from "dweb-api-logger/dist/jsonlogger.js";
+} from "dweb-api-types/config";
+import { JsonLoggerService } from "dweb-api-logger/jsonlogger";
 import {
   EnsResolverService,
   IEnsResolverServiceResolveEnsRet,
-} from "dweb-api-resolver/dist/resolver/index.js";
-import { PassthroughCacheService } from "dweb-api-cache/dist/passthrough.js";
-import { NameServiceFactory } from "dweb-api-resolver/dist/nameservice/index.js";
-import { EnsService } from "dweb-api-resolver/dist/nameservice/EnsService.js";
-import { Web3NameSdkService } from "dweb-api-resolver/dist/nameservice/Web3NameSdkService.js";
-import { ArweaveResolver } from "dweb-api-resolver/dist/resolver/arweave.js";
-import { HostnameSubstitutionService } from "dweb-api-resolver/dist/HostnameSubstitutionService/index.js";
+} from "dweb-api-resolver/resolver";
+import { PassthroughCacheService } from "dweb-api-cache/passthrough";
+import { NameServiceFactory } from "dweb-api-resolver/nameservice";
+import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
+import { Web3NameSdkService } from "dweb-api-resolver/nameservice/Web3NameSdkService";
+import { ArweaveResolver } from "dweb-api-resolver/resolver/arweave";
+import { HostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
 import {
   recordToProxyRecord,
   ensureTrailingSlash,
   trimExtraneousTrailingSlashes,
-} from "dweb-api-resolver/dist/resolver/utils.js";
-import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/dist/resolver/const.js";
+} from "dweb-api-resolver/resolver/utils";
+import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/resolver/const";
 import { ContentTypeParser } from "@helia/verified-fetch";
 import { fileTypeFromBuffer } from "@sgtpooki/file-type";
 
@@ -42,7 +42,8 @@ export type ServiceWorkerConfig = IConfigurationLogger &
 export const createServiceWorker = async (config: ServiceWorkerConfig) => {
   const logger = new JsonLoggerService();
   const cache = new PassthroughCacheService();
-  const ensService = new EnsService(config, logger);
+  const ensService = new EnsService(config, cache, logger);
+  await ensService.init();
   const web3NameSdk = new Web3NameSdkService(config, logger);
   const factory = new NameServiceFactory(logger, ensService, web3NameSdk);
   const arweave = new ArweaveResolver(logger);
@@ -88,6 +89,7 @@ export const createConfig = (
     }),
     getConfigEthereumBackend: () => ({
       getBackend: () => ETH_RPC_ENDPOINT,
+      getChainId: () => 1,
     }),
     getHostnameSubstitutionConfig: () => ({
       ...((host && {

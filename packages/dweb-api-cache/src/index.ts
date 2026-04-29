@@ -1,13 +1,13 @@
 import { Redis } from "ioredis";
 import { serialize } from "typeserializer";
 import NodeCache from "node-cache";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
+import { ILoggerService } from "dweb-api-types/logger";
 import redisMock from "ioredis-mock";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { IRedisClient } from "dweb-api-types/dist/redis.js";
-import { ICacheService, INamedMemoryCache } from "dweb-api-types/dist/cache.js";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { IRedisClient } from "dweb-api-types/redis";
+import { ICacheService, INamedMemoryCache } from "dweb-api-types/cache";
 import { ZodType } from "zod";
-import { ICacheConfig, IRedisConfig } from "dweb-api-types/dist/config.js";
+import { ICacheConfig, IRedisConfig } from "dweb-api-types/config";
 
 interface TheRedisPartsWeUse {
   get: typeof Redis.prototype.get;
@@ -108,7 +108,6 @@ export class TestRedisClient extends AbstractRedisClient {
   constructor(configurationService: IRedisConfig) {
     const redis = new (redisMock as any)();
     super(redis, configurationService);
-
   }
 
   async get(key: string): Promise<string | null> {
@@ -293,6 +292,7 @@ export class RedisCacheService implements ICacheService {
             key: cKey,
             value: result,
             ttl: ttl,
+            error: (e as any).message,
           },
         });
       }

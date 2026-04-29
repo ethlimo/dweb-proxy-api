@@ -1,8 +1,8 @@
-import { ILoggerService } from "dweb-api-types/dist/logger";
+import type { ILoggerService } from "dweb-api-types/logger";
 import superagent from "superagent";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { normalizeUrlFragmentForIpfsSubdomainGateway } from "dweb-api-resolver/dist/resolver/utils";
-import { IConfigurationKubo } from "dweb-api-types/dist/config";
+import type { IRequestContext } from "dweb-api-types/request-context";
+import { normalizeUrlFragmentForIpfsSubdomainGateway } from "dweb-api-resolver/resolver/utils";
+import type { IConfigurationKubo } from "dweb-api-types/config";
 
 export class KuboApiService {
   private loggerService: ILoggerService;
@@ -54,7 +54,7 @@ export class KuboApiService {
         });
         return null;
       }
-      var superagentRequest = this.agent(
+      let superagentRequest = this.agent(
         "POST",
         `${url}api/v0/name/resolve`,
       ).query({
@@ -77,7 +77,7 @@ export class KuboApiService {
 
       const response = await superagentRequest
         .timeout(timeout || 5000)
-        .ok((_res) => true);
+        .ok(() => true);
 
       if (response.error) {
         this.loggerService.debug("Failed to resolve IPNS name", {

@@ -1,9 +1,9 @@
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { ILoggerService } from "dweb-api-types/logger";
 import {
   INameService,
   INameServiceFactory,
-} from "dweb-api-types/dist/name-service.js";
+} from "dweb-api-types/name-service";
 export type Tag = "IEnsServiceError";
 export type ErrorType = "error";
 
@@ -38,5 +38,20 @@ export class NameServiceFactory implements INameServiceFactory {
       origin: "NameServiceFactory",
     });
     return this._ensService;
+  }
+
+  getNameServiceForCointype(
+    request: IRequestContext,
+    cointype: number,
+  ): INameService | undefined {
+    if (cointype === 60) {
+      this._logger.debug("Using EnsService for cointype " + cointype, {
+        ...request,
+        origin: "NameServiceFactory",
+      });
+      return this._ensService;
+    }
+
+    return undefined;
   }
 }

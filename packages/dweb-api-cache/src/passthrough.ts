@@ -1,5 +1,5 @@
-import { ICacheService } from "dweb-api-types/dist/cache.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
+import { ICacheService } from "dweb-api-types/cache";
+import { IRequestContext } from "dweb-api-types/request-context";
 import { ZodType } from "zod";
 
 export class PassthroughCacheService implements ICacheService {

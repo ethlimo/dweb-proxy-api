@@ -10,6 +10,8 @@ X-Content-Path: /
 X-Content-Storage-Type: ipfs-ns
 ```
 
+✅ ENSv2 ready
+
 __Gateway request flow__
 
 ![alt text](./images/flow.jpg "Example resolution and request data flow")
@@ -43,6 +45,16 @@ __Gateway request flow__
 | `PURGE_CACHE_PATTERN` | `"*.${DOMAIN_TLD_HOSTNAME}"` | Key pattern to purge if `PURGE_CACHE_ON_START` is enabled. |
 | `SW_BUNDLE_PUBLIC_URL` | `""` | Optional value if using service workers instead of the API. Set this to the parent wildcard domain you will be serving traffic from, i.e. setting this value to `eth.example.com` would support `ens.eth.example.com`, etc.  |
 | `SERVICE_WORKER_TRUSTLESS` | `"false"` | Optional value if using service workers instead of the API. Set this to `"true"` to enable [trustless IPFS gateway mode](https://specs.ipfs.tech/http-gateways/trustless-gateway/). You must also set `IPFS_TARGET` to the hostname of a gateway running in trustless mode.   |
+| `CLUSTER_WORKERS` | `1` | Number of worker processes to fork. Set to the number of vCPUs on your host (or container CPU limit). |
+| `CLUSTER_MAX_INFLIGHT` | `300` | Maximum concurrent in-flight requests per worker before the overload circuit opens. |
+| `CLUSTER_MAX_LAG_MS` | `750` | Event-loop P99 lag threshold (measured every heartbeat). Overload detection fires only when **both** `maxInflight` AND `maxLagMs` are exceeded simultaneously. |
+| `CLUSTER_OVERLOAD_GRACE_MS` | `8000` | Milliseconds a worker may remain in the overloaded state before it exits. Gives the load balancer time to route new connections elsewhere. |
+| `CLUSTER_NO_HEARTBEAT_MS` | `5000` | If no heartbeat is received from a worker within this window, the primary sends `SIGKILL` to the stuck worker. |
+| `CLUSTER_CATASTROPHIC_RESTARTS` | `10` | If this many workers exit (for any reason) within `CLUSTER_CATASTROPHIC_WINDOW_MS`, the primary calls `process.exit(1)`. |
+| `CLUSTER_CATASTROPHIC_WINDOW_MS` | `30000` | ms | Rolling time window used by the catastrophic-restart detector. |
+| `DATAURL_ENABLED` | `"false"` | Enable [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) with [ENSIP-TBD](https://github.com/nxt3d/ENSIP-ideas/blob/main/ENSIPS/ensip-TBD-2.md) [hook](https://github.com/ethlimo/ens-hooks) support |
+| `DATAURL_PORT` | `12500` | TCP port to bind on |
+| `DATAURL_ENDPOINT` | (unset) | URL of the [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) hook execution endpoint. Required if `DATAURL_ENABLED=true`. |
 
 ## Quickstart
 
@@ -74,14 +86,10 @@ npm run test
 $ curl http://localhost:8888 -H 'Host: ens.eth' -sD - -o /dev/null
 
 HTTP/1.1 200 OK
-X-Powered-By: Express
 X-Content-Location: k51qzi5uqu5dipklqpo2uq7advlajxx5wxob0mwyqbxb5zu4htblc4bjipy834.ipns.dweb.link
 X-Content-Path: /
 X-Content-Storage-Type: ipns-ns
-Date: Fri, 29 Mar 2024 17:11:14 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-Transfer-Encoding: chunked
+...
 ```
 
 ### Container example

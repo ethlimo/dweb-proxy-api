@@ -1,66 +1,68 @@
+import type { ServerConfiguration } from "../configuration/index.js";
 import {
-  ServerConfiguration,
   TestConfigurationService,
   getDefaultServerConfiguration,
-} from "../configuration";
-import { IDnsQuery, DnsQuery } from "../dnsquery";
-import {
+} from "../configuration/index.js";
+import type { IDnsQuery } from "../dnsquery/index.js";
+import { DnsQuery } from "../dnsquery/index.js";
+import type {
   IDomainQueryService,
-  DomainQueryService,
   IDomainQuerySuperagentService,
+} from "../services/DomainsQueryService/index.js";
+import {
+  DomainQueryService,
   DomainQuerySuperagentService,
   TestDomainQuerySuperagentService,
-} from "../services/DomainsQueryService";
-import { TestResolverService } from "../test/TestResolverService";
-import {
-  DomainRateLimitService,
-  IDomainRateLimitService,
-} from "../services/DomainRateLimit";
-import { KuboApiService } from "../services/KuboApiService";
+} from "../services/DomainsQueryService/index.js";
+import { TestResolverService } from "../test/TestResolverService.js";
+import type { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
+import { DomainRateLimitService } from "../services/DomainRateLimit/index.js";
+import { KuboApiService } from "../services/KuboApiService/index.js";
 import {
   EnvironmentBinding,
   EnvironmentConfiguration,
-} from "./BindingsManager";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { IRedisClient } from "dweb-api-types/dist/redis";
-import { ICacheService, INamedMemoryCache } from "dweb-api-types/dist/cache";
-import { IKuboApiService } from "dweb-api-types/dist/kubo-api";
-import {
+} from "./BindingsManager.js";
+import type { ILoggerService } from "dweb-api-types/logger";
+import type { IRedisClient } from "dweb-api-types/redis";
+import type {
+  ICacheService,
+  INamedMemoryCache,
+} from "dweb-api-types/cache";
+import type { IKuboApiService } from "dweb-api-types/kubo-api";
+import type {
+  IDataUrlResolverService,
   INameService,
   INameServiceFactory,
-} from "dweb-api-types/dist/name-service";
-import { IArweaveResolver } from "dweb-api-types/dist/arweave";
-import { IEnsResolverService } from "dweb-api-types/dist/ens-resolver";
-import { EnsResolverService } from "dweb-api-resolver/dist/resolver/index";
-import {
-  HostnameSubstitutionService,
-  IHostnameSubstitutionService,
-} from "dweb-api-resolver/dist/HostnameSubstitutionService/index";
-import { ArweaveResolver } from "dweb-api-resolver/dist/resolver/arweave";
+} from "dweb-api-types/name-service";
+import type { IArweaveResolver } from "dweb-api-types/arweave";
+import type { IEnsResolverService } from "dweb-api-types/ens-resolver";
+import { EnsResolverService } from "dweb-api-resolver/resolver";
+import type { IHostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
+import { HostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
+import { ArweaveResolver } from "dweb-api-resolver/resolver/arweave";
 import {
   MemoryCacheFactory,
   RedisClient,
   TestRedisClient,
   LocallyCachedRedisCacheService,
-} from "dweb-api-cache/dist";
-import { TestLoggerService, LoggerService } from "dweb-api-logger/dist/index";
-import { NameServiceFactory } from "dweb-api-resolver/dist/nameservice/index";
-import {} from "dweb-api-resolver/dist/resolver/index";
-import { Web3NameSdkService } from "dweb-api-resolver/dist/nameservice/Web3NameSdkService";
-import { EnsService } from "dweb-api-resolver/dist/nameservice/EnsService";
+} from "dweb-api-cache";
+import { TestLoggerService, LoggerService } from "dweb-api-logger";
+import { NameServiceFactory } from "dweb-api-resolver/nameservice";
+import { Web3NameSdkService } from "dweb-api-resolver/nameservice/Web3NameSdkService";
+import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
 
-export const createApplicationConfigurationBindingsManager = () => {
+export const createApplicationConfigurationBindingsManager = async () => {
   const configuration = new EnvironmentBinding<ServerConfiguration>({
-    [EnvironmentConfiguration.Production]: () =>
+    [EnvironmentConfiguration.Production]: async () =>
       getDefaultServerConfiguration(),
-    [EnvironmentConfiguration.Development]: () =>
+    [EnvironmentConfiguration.Development]: async () =>
       new TestConfigurationService(),
   });
   const logger = new EnvironmentBinding<ILoggerService>({
-    [EnvironmentConfiguration.Production]: (env) =>
-      new LoggerService(configuration.getBinding(env)),
-    [EnvironmentConfiguration.Development]: (env) =>
-      new TestLoggerService(configuration.getBinding(env)),
+    [EnvironmentConfiguration.Production]: async (env) =>
+      new LoggerService(await configuration.getBinding(env)),
+    [EnvironmentConfiguration.Development]: async (env) =>
+      new TestLoggerService(await configuration.getBinding(env)),
   });
 
   const _namedMemoryCacheFactory = new MemoryCacheFactory();
@@ -68,174 +70,210 @@ export const createApplicationConfigurationBindingsManager = () => {
   const namedMemoryCacheFactory = new EnvironmentBinding<
     (x: string) => INamedMemoryCache
   >({
-    [EnvironmentConfiguration.Production]: (env) => (serviceName: string) =>
-      _namedMemoryCacheFactory.createNamedMemoryCacheFactory(
-        serviceName,
-        logger.getBinding(env),
-        configuration.getBinding(env),
-      ),
-    [EnvironmentConfiguration.Development]: (env) => (serviceName: string) =>
-      _namedMemoryCacheFactory.createNamedMemoryCacheFactory(
-        serviceName,
-        logger.getBinding(env),
-        configuration.getBinding(env),
-      ),
+    [EnvironmentConfiguration.Production]: async (env) => {
+      const l = await logger.getBinding(env);
+      const c = await configuration.getBinding(env);
+      return (serviceName: string) =>
+        _namedMemoryCacheFactory.createNamedMemoryCacheFactory(
+          serviceName,
+          l,
+          c,
+        );
+    },
+    [EnvironmentConfiguration.Development]: async (env) => {
+      const l = await logger.getBinding(env);
+      const c = await configuration.getBinding(env);
+      return (serviceName: string) =>
+        _namedMemoryCacheFactory.createNamedMemoryCacheFactory(
+          serviceName,
+          l,
+          c,
+        );
+    },
   });
 
   const redisClient = new EnvironmentBinding<IRedisClient>({
-    [EnvironmentConfiguration.Production]: (env) =>
-      new RedisClient(configuration.getBinding(env)),
-    [EnvironmentConfiguration.Development]: (env) =>
-      new TestRedisClient(configuration.getBinding(env)),
+    [EnvironmentConfiguration.Production]: async (env) =>
+      new RedisClient(await configuration.getBinding(env)),
+    [EnvironmentConfiguration.Development]: async (env) =>
+      new TestRedisClient(await configuration.getBinding(env)),
   });
 
   const cacheService = new EnvironmentBinding<ICacheService>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new LocallyCachedRedisCacheService(
-        logger.getBinding(env),
-        redisClient.getBinding(env),
-        namedMemoryCacheFactory.getBinding(env),
-        configuration.getBinding(env),
+        await logger.getBinding(env),
+        await redisClient.getBinding(env),
+        await namedMemoryCacheFactory.getBinding(env),
+        await configuration.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new LocallyCachedRedisCacheService(
-        logger.getBinding(env),
-        redisClient.getBinding(env),
-        namedMemoryCacheFactory.getBinding(env),
-        configuration.getBinding(env),
+        await logger.getBinding(env),
+        await redisClient.getBinding(env),
+        await namedMemoryCacheFactory.getBinding(env),
+        await configuration.getBinding(env),
       ),
   });
 
   const hostnameSubstitution =
     new EnvironmentBinding<IHostnameSubstitutionService>({
-      [EnvironmentConfiguration.Production]: (env) =>
+      [EnvironmentConfiguration.Production]: async (env) =>
         new HostnameSubstitutionService(
-          configuration.getBinding(env),
-          logger.getBinding(env),
+          await configuration.getBinding(env),
+          await logger.getBinding(env),
         ),
-      [EnvironmentConfiguration.Development]: (env) =>
+      [EnvironmentConfiguration.Development]: async (env) =>
         new HostnameSubstitutionService(
-          configuration.getBinding(env),
-          logger.getBinding(env),
+          await configuration.getBinding(env),
+          await logger.getBinding(env),
         ),
     });
 
   const domainQuerySuperagent =
     new EnvironmentBinding<IDomainQuerySuperagentService>({
-      [EnvironmentConfiguration.Production]: (env) =>
-        new DomainQuerySuperagentService(configuration.getBinding(env)),
-      [EnvironmentConfiguration.Development]: (_env) =>
+      [EnvironmentConfiguration.Production]: async (env) =>
+        new DomainQuerySuperagentService(await configuration.getBinding(env)),
+      [EnvironmentConfiguration.Development]: async () =>
         new TestDomainQuerySuperagentService(),
     });
 
   const domainQuery = new EnvironmentBinding<IDomainQueryService>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new DomainQueryService(
-        logger.getBinding(env),
-        domainQuerySuperagent.getBinding(env),
-        cacheService.getBinding(env),
-        configuration.getBinding(env),
+        await logger.getBinding(env),
+        await domainQuerySuperagent.getBinding(env),
+        await cacheService.getBinding(env),
+        await configuration.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new DomainQueryService(
-        logger.getBinding(env),
-        domainQuerySuperagent.getBinding(env),
-        cacheService.getBinding(env),
-        configuration.getBinding(env),
+        await logger.getBinding(env),
+        await domainQuerySuperagent.getBinding(env),
+        await cacheService.getBinding(env),
+        await configuration.getBinding(env),
       ),
   });
 
   const kuboApi = new EnvironmentBinding<IKuboApiService>({
-    [EnvironmentConfiguration.Production]: (env) =>
-      new KuboApiService(logger.getBinding(env), configuration.getBinding(env)),
-    [EnvironmentConfiguration.Development]: (env) =>
-      new KuboApiService(logger.getBinding(env), configuration.getBinding(env)),
+    [EnvironmentConfiguration.Production]: async (env) =>
+      new KuboApiService(
+        await logger.getBinding(env),
+        await configuration.getBinding(env),
+      ),
+    [EnvironmentConfiguration.Development]: async (env) =>
+      new KuboApiService(
+        await logger.getBinding(env),
+        await configuration.getBinding(env),
+      ),
   });
 
   const web3NameSdk = new EnvironmentBinding<INameService>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new Web3NameSdkService(
-        configuration.getBinding(env),
-        logger.getBinding(env),
+        await configuration.getBinding(env),
+        await logger.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (_env) => new TestResolverService(),
+    [EnvironmentConfiguration.Development]: async () =>
+      new TestResolverService(),
   });
 
+  const createNameService = async (
+    env: EnvironmentConfiguration,
+  ): Promise<EnsService> => {
+    const v = new EnsService(
+      await configuration.getBinding(env),
+      await cacheService.getBinding(env),
+      await logger.getBinding(env),
+    );
+    await v.init();
+    return v;
+  };
+
   const ensService = new EnvironmentBinding<INameService>({
-    [EnvironmentConfiguration.Production]: (env) =>
-      new EnsService(configuration.getBinding(env), logger.getBinding(env)),
-    [EnvironmentConfiguration.Development]: (_env) => new TestResolverService(),
+    [EnvironmentConfiguration.Production]: createNameService,
+    [EnvironmentConfiguration.Development]: async () =>
+      new TestResolverService(),
   });
 
   const domainRateLimit = new EnvironmentBinding<IDomainRateLimitService>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new DomainRateLimitService(
-        redisClient.getBinding(env),
-        logger.getBinding(env),
+        await redisClient.getBinding(env),
+        await logger.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new DomainRateLimitService(
-        redisClient.getBinding(env),
-        logger.getBinding(env),
+        await redisClient.getBinding(env),
+        await logger.getBinding(env),
       ),
   });
 
   const arweaveResolver = new EnvironmentBinding<IArweaveResolver>({
-    [EnvironmentConfiguration.Production]: (env) =>
-      new ArweaveResolver(logger.getBinding(env)),
-    [EnvironmentConfiguration.Development]: (_env) => new TestResolverService(),
+    [EnvironmentConfiguration.Production]: async (env) =>
+      new ArweaveResolver(await logger.getBinding(env)),
+    [EnvironmentConfiguration.Development]: async () =>
+      new TestResolverService(),
   });
 
   const nameServiceFactory = new EnvironmentBinding<INameServiceFactory>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new NameServiceFactory(
-        logger.getBinding(env),
-        ensService.getBinding(env),
-        web3NameSdk.getBinding(env),
+        await logger.getBinding(env),
+        await ensService.getBinding(env),
+        await web3NameSdk.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new NameServiceFactory(
-        logger.getBinding(env),
-        ensService.getBinding(env),
-        web3NameSdk.getBinding(env),
+        await logger.getBinding(env),
+        await ensService.getBinding(env),
+        await web3NameSdk.getBinding(env),
       ),
   });
 
   const ensResolver = new EnvironmentBinding<IEnsResolverService>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new EnsResolverService(
-        logger.getBinding(env),
-        cacheService.getBinding(env),
-        arweaveResolver.getBinding(env),
-        kuboApi.getBinding(env),
-        nameServiceFactory.getBinding(env),
+        await logger.getBinding(env),
+        await cacheService.getBinding(env),
+        await arweaveResolver.getBinding(env),
+        await kuboApi.getBinding(env),
+        await nameServiceFactory.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new EnsResolverService(
-        logger.getBinding(env),
-        cacheService.getBinding(env),
-        arweaveResolver.getBinding(env),
-        kuboApi.getBinding(env),
-        nameServiceFactory.getBinding(env),
+        await logger.getBinding(env),
+        await cacheService.getBinding(env),
+        await arweaveResolver.getBinding(env),
+        await kuboApi.getBinding(env),
+        await nameServiceFactory.getBinding(env),
       ),
   });
 
   const dnsQuery = new EnvironmentBinding<IDnsQuery>({
-    [EnvironmentConfiguration.Production]: (env) =>
+    [EnvironmentConfiguration.Production]: async (env) =>
       new DnsQuery(
-        logger.getBinding(env),
-        configuration.getBinding(env),
-        domainQuery.getBinding(env),
-        ensResolver.getBinding(env),
+        await logger.getBinding(env),
+        await configuration.getBinding(env),
+        await domainQuery.getBinding(env),
+        await ensResolver.getBinding(env),
       ),
-    [EnvironmentConfiguration.Development]: (env) =>
+    [EnvironmentConfiguration.Development]: async (env) =>
       new DnsQuery(
-        logger.getBinding(env),
-        configuration.getBinding(env),
-        domainQuery.getBinding(env),
-        ensResolver.getBinding(env),
+        await logger.getBinding(env),
+        await configuration.getBinding(env),
+        await domainQuery.getBinding(env),
+        await ensResolver.getBinding(env),
       ),
   });
+
+  const dataUrlResolverService =
+    new EnvironmentBinding<IDataUrlResolverService>({
+      [EnvironmentConfiguration.Production]: createNameService,
+      [EnvironmentConfiguration.Development]: () => {
+        throw new Error("Not implemented");
+      },
+    });
 
   return {
     configuration,
@@ -254,5 +292,6 @@ export const createApplicationConfigurationBindingsManager = () => {
     nameServiceFactory,
     ensResolver,
     dnsQuery,
+    dataUrlResolverService,
   };
 };

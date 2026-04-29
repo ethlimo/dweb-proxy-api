@@ -1,15 +1,15 @@
 import { recordNamespaceToUrlHandlerMap } from "./const.js";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
+import { ILoggerService } from "dweb-api-types/logger";
 import { arweaveUrlToSandboxSubdomain } from "./arweave.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { IRecord } from "dweb-api-types/dist/ens-resolver.js";
-import { ProxyRecord } from "dweb-api-types/dist/dweb-api-resolver.js";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { IRecord } from "dweb-api-types/ens-resolver";
+import { ProxyRecord } from "dweb-api-types/dweb-api-resolver";
 import {
   IConfigurationArweave,
   IConfigurationEnsSocials,
   IConfigurationIpfs,
   IConfigurationSwarm,
-} from "dweb-api-types/dist/config.js";
+} from "dweb-api-types/config";
 
 export const ensureTrailingSlash = (path: string) => {
   if (path.endsWith("/")) {
@@ -25,6 +25,71 @@ export const trimExtraneousTrailingSlashes = (path: string) => {
 
 export const trimExtraneousLeadingSlashes = (path: string) => {
   return path.replace(/^\/+/, "/");
+};
+
+/**
+ * Extracts an explicit port number from a URL string.
+ * Only extracts from the authority section to avoid matching :<digits> in paths/query/fragments.
+ * Supports both IPv6 ([host]:port) and regular (host:port) formats.
+ *
+ * @param urlString - The original URL string
+ * @returns The port number as a string, or null if no explicit port is found
+ */
+export const extractExplicitPort = (urlString: string): string | null => {
+  const authorityStart = urlString.indexOf("//");
+  if (authorityStart === -1) {
+    return null;
+  }
+
+  const afterSlashes = urlString.slice(authorityStart + 2);
+  const authorityEndRel = afterSlashes.search(/[/?#]/);
+  const authority =
+    authorityEndRel === -1
+      ? afterSlashes
+      : afterSlashes.slice(0, authorityEndRel);
+
+  // First, try IPv6-style [host]:port
+  let portMatch = authority.match(/\]:(\d+)$/);
+  if (!portMatch) {
+    // Fallback to generic host:port
+    portMatch = authority.match(/:(\d+)$/);
+  }
+
+  return portMatch ? portMatch[1] : null;
+};
+
+/**
+ * Constructs a URL string from a URL object while preserving an explicit port.
+ * This bypasses the WHATWG URL API's automatic normalization of default ports
+ * (443 for HTTPS, 80 for HTTP). Also handles IPv6 literals and userinfo preservation.
+ *
+ * @param url - The URL object to convert to string
+ * @param explicitPort - The port number to preserve (if null, uses url.toString())
+ * @returns The URL string with the port preserved
+ */
+export const constructUrlWithPort = (
+  url: URL,
+  explicitPort: string | null,
+): string => {
+  if (!explicitPort) {
+    return url.toString();
+  }
+
+  // Ensure IPv6 literals are correctly bracketed when combined with a port
+  // url.hostname already includes brackets for IPv6 addresses, so use it as-is
+  const hostForPort = url.hostname;
+
+  // Preserve userinfo (username/password) to match URL.toString() behavior
+  let userinfo = "";
+  if (url.username) {
+    userinfo = url.username;
+    if (url.password) {
+      userinfo += `:${url.password}`;
+    }
+    userinfo += "@";
+  }
+
+  return `${url.protocol}//${userinfo}${hostForPort}:${explicitPort}${url.pathname}${url.search}${url.hash}`;
 };
 
 export interface ProxyRecordUnableToRedirect {
@@ -114,34 +179,22 @@ export const recordToProxyRecord = async (
     } else if (record.codec === "arweave-ns") {
       const backendString = arweaveConfig.getBackend();
       const backend = new URL(backendString);
-      
-      // Extract explicit port from original backend string
-      // Use lookahead to match port followed by /, ?, #, or end of string
-      let explicitPort: string | null = null;
-      const portMatch = backendString.match(/:(\d+)(?=\/|\?|#|$)/);
-      if (portMatch) {
-        explicitPort = portMatch[1];
-      }
-      
+
+      // Extract explicit port from the original backend string
+      const explicitPort = extractExplicitPort(backendString);
+
       const resultUrl = await arweaveUrlToSandboxSubdomain(
         request,
         logger,
         record.DoHContentIdentifier,
         backend,
       );
-      
-      // Manually construct XContentLocation to preserve explicit port
+
+      // Construct URL with port preservation
       // Note: We cannot use url.port = explicitPort because the URL API
       // automatically normalizes default ports (443 for https, 80 for http)
-      // The URL components (pathname, search, hash) are already properly encoded by the URL object
-      let xContentLocation: string;
-      if (explicitPort) {
-        // Preserve explicit port even if it's a default port
-        xContentLocation = `${resultUrl.protocol}//${resultUrl.hostname}:${explicitPort}${resultUrl.pathname}${resultUrl.search}${resultUrl.hash}`;
-      } else {
-        xContentLocation = resultUrl.toString();
-      }
-      
+      const xContentLocation = constructUrlWithPort(resultUrl, explicitPort);
+
       return {
         ...record,
         XContentLocation: xContentLocation,
@@ -158,6 +211,21 @@ export const recordToProxyRecord = async (
     }
     //record.codec should be never due to exhaustivity check
     return record.codec;
+  } else if (record._tag === "DataUriRecord") {
+    return {
+      ...record,
+      XContentLocation: record.uri,
+      XContentPath: "/",
+    };
+  } else if (record._tag === "DataUrlRecord") {
+    const encoding = Buffer.from(JSON.stringify(record.data)).toString(
+      "base64url",
+    );
+    return {
+      ...record,
+      XContentLocation: encodeURIComponent(record.ensname),
+      XContentPath: ensureTrailingSlash(`/${encoding}/`),
+    };
   } else {
     //record should be never due to exhaustivity check
     return record;

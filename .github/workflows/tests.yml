@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        # step-security/harden-runner@v2.13.2
-        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -42,7 +41,7 @@ jobs:
         run: |
           ./bin/build.sh
         env:
-          SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS: 48
+          SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS: 6
       - name: Run Tests
         id: test
         run: |

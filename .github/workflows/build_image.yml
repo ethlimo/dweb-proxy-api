@@ -21,8 +21,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: Harden Runner
-        # step-security/harden-runner@v2.13.2
-        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -48,9 +47,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
           labels: |
-            org.opencontainers.image.title=dweb-proxy-api
-            org.opencontainers.image.description=eth.limo dWeb Proxy API
-            org.opencontainers.image.url=https://github.com/ethlimo/dweb-proxy-api
+            org.opencontainers.image.title="dweb-proxy-api"
+            org.opencontainers.image.description="eth.limo dWeb Proxy API"
+            org.opencontainers.image.url="https://github.com/ethlimo/dweb-proxy-api"
       - name: Set up QEMU
         # docker/setup-qemu-action@v3.7.0
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130    

@@ -1,8 +1,8 @@
 import { LoggerFactory, WarpFactory } from "warp-contracts";
 import { base32 } from "rfc4648";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { IArweaveResolver } from "dweb-api-types/dist/arweave.js";
+import { ILoggerService } from "dweb-api-types/logger";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { IArweaveResolver } from "dweb-api-types/arweave";
 
 LoggerFactory.INST.setOptions({ LogLevel: "none" });
 
@@ -49,6 +49,10 @@ export class ArweaveResolver implements IArweaveResolver {
     }
 
     var match: string | null = null;
+
+    //BUG: this uses longest prefix matching on the ens name, which means that it is technically incorrect
+    //     what we should be doing is requiring subdomains to be explicit to the ENS name
+    //     I don't know if there's a funny edge case here
 
     keys.forEach((key: string) => {
       if (ens_name.startsWith(key)) {

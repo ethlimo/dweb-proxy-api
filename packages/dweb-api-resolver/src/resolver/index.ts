@@ -1,14 +1,14 @@
 import { CID } from "multiformats";
 import { bases } from "multiformats/basics";
-import { INameServiceFactory } from "dweb-api-types/dist/name-service.js";
-import { ICacheService } from "dweb-api-types/dist/cache.js";
+import { INameServiceFactory } from "dweb-api-types/name-service";
+import { ICacheService } from "dweb-api-types/cache";
 import { peerIdFromString } from "@libp2p/peer-id";
 import * as z from "zod";
-import { IArweaveResolver } from "dweb-api-types/dist/arweave.js";
-import { IKuboApiService } from "dweb-api-types/dist/kubo-api.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
-import { IRecord, Record } from "dweb-api-types/dist/ens-resolver.js";
+import { IArweaveResolver } from "dweb-api-types/arweave";
+import { IKuboApiService } from "dweb-api-types/kubo-api";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { ILoggerService } from "dweb-api-types/logger";
+import { IRecord, Record } from "dweb-api-types/ens-resolver";
 
 export const calculateIpfsIpnsSubdomainRecord = (
   method: "ipfs-ns" | "ipns-ns",
@@ -260,9 +260,7 @@ export class EnsResolverService implements IEnsResolverService {
         },
       });
 
-      let res = contentHash;
-
-      if (!res) {
+      if (!contentHash) {
         return {
           record: {
             _tag: "ens-socials-redirect",
@@ -270,7 +268,26 @@ export class EnsResolverService implements IEnsResolverService {
           },
           resolverExists: false,
         };
+      } else if (contentHash._tag === "DecodedDataUri") {
+        return {
+          record: {
+            _tag: "DataUriRecord",
+            uri: contentHash.data,
+          },
+          resolverExists: true,
+        };
+      } else if (contentHash._tag === "DecodedDataUrl") {
+        return {
+          record: {
+            _tag: "DataUrlRecord",
+            ensname: hostname,
+            data: contentHash.data,
+          },
+          resolverExists: true,
+        };
       }
+
+      let res = contentHash.codec;
 
       if (res.startsWith("arweave://")) {
         const ar_id = res.split("arweave://")[1];

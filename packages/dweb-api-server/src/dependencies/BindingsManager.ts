@@ -4,7 +4,9 @@ export enum EnvironmentConfiguration {
 }
 
 export type BindingEnvironmentConfig<T> = {
-  [K in EnvironmentConfiguration]: (env: EnvironmentConfiguration) => T;
+  [K in EnvironmentConfiguration]: (
+    env: EnvironmentConfiguration,
+  ) => Promise<T>;
 };
 
 export class EnvironmentBinding<T> {
@@ -16,13 +18,14 @@ export class EnvironmentBinding<T> {
     this.bindings = bindings;
   }
 
-  public getBinding(env: EnvironmentConfiguration): T {
+  public async getBinding(env: EnvironmentConfiguration): Promise<T> {
     if (this.cache.has(env)) {
       return this.cache.get(env) as T;
     } else {
       const binding = this.bindings[env](env);
-      this.cache.set(env, binding);
-      return binding;
+      const v = await binding;
+      this.cache.set(env, v);
+      return v;
     }
   }
 }

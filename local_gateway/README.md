@@ -1,14 +1,14 @@
 # Running a Local Gateway - Your dWeb Swiss Army Knife
 
-### Overview
+## Overview
 
 We've heard your feedback loud and clear! Now you can run a **complete** lightweight ENS gateway stack locally on your machine or even provide it as a service to your home or work network(s). This solution allows you to natively resolve ENS domains and dWebsite content without the need for third-party gateways.
 
 This local stack has full feature parity with the public eth.limo service with the added benefits of trustless protocol interaction and complete customization. 
 
-Say goodye to DNS hijacking, censorship, and hacks by running your own private gateway that puts you in full control. Choose your own RPC provider or use a VPN/Tor for additional privacy. Each storage protocol uses its own light client for content verfication, ensuring the integrity of the data you retrieve.
+Say goodye to DNS hijacking, censorship, and hacks by running your own private gateway that puts you in full control. Choose your own RPC provider or use a VPN/Tor for additional privacy. Each storage protocol uses its own light client for content verification, ensuring the integrity of the data you retrieve.
 
-#### Features
+### Features
 
 | Feature | Description |
 | ------- | ------------|
@@ -25,16 +25,22 @@ Say goodye to DNS hijacking, censorship, and hacks by running your own private g
 | ✅ Decentralized | Interact directly with protocols. No middlemen or third parties  |
 | ✅ OS-level integration | Break out of the browser. All of your applications can now natively resolve ENS & dWeb content over HTTP |
 
-### Requirements
+### Why isn't this a browser or browser extension?
 
-**OS compatibility**
+Browsers have enormous attack surfaces and a long history of security vulnerabilities. They also have decades of R&D and engineering resources poured into them by some of the largest tech companies in the world. Javascript sandboxing is best left to battle-tested browsers that have been fuzzed and hardened over many years.
+
+By running a local gateway, you can leverage the security guarantees of the browser of your choice while still retaining full ENS & dWeb resolution capabilities. Additionally any HTTP client on your system or network can resolve ENS dWebsites in the same manner, using the configuration and privacy settings of your local gateway stack. This is especially attractive for agentic workloads and scrapers that need to resolve ENS content without sacrificing trust or privacy by using third-party gateways.
+
+## Requirements
+
+### OS compatibility
 
 | OS | Architecture
 | --- | --- |
 | Linux | `amd64`, `arm64` |
 | macOS | `arm64` |
 
-**Container runtime**
+### Container runtime
 
 1. `docker` or `podman`:
    - docker: https://docs.docker.com/get-docker/
@@ -43,7 +49,7 @@ Say goodye to DNS hijacking, censorship, and hacks by running your own private g
    - docker-compose: https://docs.docker.com/compose/install/
    - podman-compose: https://github.com/containers/podman-compose
 
-### Installation
+## Installation
 
 ```bash
 git clone https://github.com/ethlimo/dweb-proxy-api.git
@@ -55,7 +61,7 @@ The setup script will deploy the gateway stack via one of the above container ru
 
 After running `setup.sh`, Caddy server (HTTP ingress) will automatically create a `./data` bind-mount directory for persistent certificate storage. If this directory is regenerated or removed, you will need to re-run the `setup.sh` script in order to reinstall the CA certificate. 
 
-**Stopping the gateway**
+### Stopping the gateway
 
 ```bash
 ./stop.sh
@@ -65,7 +71,7 @@ docker-compose down
 podman-compose down
 ```
 
-**Starting the gateway (after initial setup)**
+### Starting the gateway (after initial setup)
 
 ```bash
 ./start.sh
@@ -75,7 +81,7 @@ docker-compose up -d
 podman-compose up -d
 ```
 
-**Checking gateway status**
+### Checking gateway status
 
 ```bash
 docker ps
@@ -83,7 +89,7 @@ docker ps
 podman ps
 ```
 
-### Usage
+## Usage
 
 Once the gateway has been started and the CA certificate added to your system's trust store, you can access any ENS domain via `*.eth.localhost`. For example, to resolve `ens.eth` or `app.ens.eth` simply navigate to `https://ens.eth.localhost` or `https://app.ens.eth.localhost` in your browser.
 
@@ -95,9 +101,9 @@ One of the added benefits of running a local gateway is the ability to extend EN
 curl https://ens.eth.localhost
 ```
 
-This is perfect for scrapers or agents that need to resolve ENS/dWeb content without sactificing trust or privacy by using third-party gateways.
+This is perfect for scrapers or agents that need to resolve ENS/dWeb content without sacrificing trust or privacy by using third-party gateways.
 
-### IPFS Features
+## IPFS Features
 
 A full featured IPFS [gateway](https://github.com/ipfs/rainbow) is included with support for both IPFS and IPNS. 
 
@@ -109,7 +115,7 @@ You can fetch IPFS content using either the CID, IPNS record or an ENS domain th
 | `https://{ipns_record}.ipns.localhost` | IPNS record |
 | `https://ens-eth.ipns.localhost` | ENS domain resolving to IPFS (note that ENS domain labels must be flattened, i.e. `ens-eth` instead of `ens.eth`) |
 
-### Arweave Features
+## Arweave Features
 
 An Arweave light client [gateway](https://github.com/vilenarios/wayfinder-router) is included with support for both Arweave txs and ArNS records:
 
@@ -118,7 +124,7 @@ An Arweave light client [gateway](https://github.com/vilenarios/wayfinder-router
 | `https://{tx}.arweave.localhost` | Arweave transaction |
 | `https://{sandbox_subdomain}.arweave.localhost/{tx}` | Sandbox format |
 
-### Swarm Features
+## Swarm Features
 
 A Swarm light client [gateway](https://github.com/ethersphere/bee) is included with support for Swarm identifiers and ENS domains that resolve to Swarm content:
 
@@ -127,7 +133,7 @@ A Swarm light client [gateway](https://github.com/ethersphere/bee) is included w
 | `https://{swarm_cid}.swarm.localhost` | Swarm hash |
 
 
-### DNS-over-HTTPS
+## DNS-over-HTTPS
 
 Similar to the official eth.limo DoH resolver, this local implementation allows you to extend native ENS resolution to any application that supports DNS-over-HTTPS. 
 
@@ -143,7 +149,36 @@ $ curl 'https://dns.eth.localhost/dns-query?name=ens.eth'
 
 Expanded documentation can be found [here](https://github.com/ethlimo/documentation/blob/master/dns-over-https/doh.md).
 
-### Privacy & Security
+## Data URL Server
+
+Handles [EIP-8121 hook](https://github.com/ethlimo/ens-hooks) resolution.
+Decodes a base64url-encoded on-chain hook payload, executes the smart contract
+call via ethers.js, and returns the result. This is the one mode where dweb-api
+resolves **and** serves content rather than deferring to the reverse proxy. Consult [ENSIP-TBD](https://github.com/nxt3d/ENSIP-ideas/blob/main/ENSIPS/ensip-TBD-2.md) for details on the ENSIP that defines this hook format and behavior.
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATAURL_ENABLED` | `"false"` | Set to `"true"` to enable |
+| `DATAURL_PORT` | `12500` | TCP port to bind on |
+| `DATAURL_ENDPOINT` | (unset) | URL of the EIP-8121 hook execution endpoint. Required if `DATAURL_ENABLED=true`. |
+
+### Request Format
+
+`GET /api/v1/dataurl/:ensname/:payload`
+
+- `:ensname` — the ENS name (e.g. `example.eth`)
+- `:payload` — base64url-encoded hook payload from the ENS content hash
+
+### Troubleshooting
+
+- **500 errors** — Check `DATAURL_ENDPOINT` is set and reachable.
+- **Unexpected responses** — Verify the on-chain hook contract is correctly
+  registered for the ENS name.
+
+
+## Privacy & Security
 
 While local resolution offers substantial privacy improvements over public options, there are still several key considerations to take into account:
 
@@ -172,7 +207,7 @@ While local resolution offers substantial privacy improvements over public optio
 
    As with any type of web content you should exercise extreme caution when visiting any site that you're unfamilar with (even then please be smart). This is especially true for anything that asks you to connect a wallet. Never share your private keys or seed phrases with any site, ever, under any circumstances.
 
-### Customization & Configuration
+## Customization & Configuration
 
 The HTTP ingress leverages Caddy Server, which offers a simple and powerful configuration format. All Caddy configurations live in `./caddy` and can be modified to suit your needs. Probably the most common modification would be to add custom headers or modify existing ones for a given site. 
 

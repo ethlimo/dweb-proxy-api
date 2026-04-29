@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { SinonStubbedInstance, createStubInstance } from "sinon";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { IRedisClient } from "dweb-api-types/dist/redis.js";
-import { ILoggerService } from "dweb-api-types/dist/logger.js";
-import { RedisClient } from "dweb-api-cache/dist/index.js";
-import { DomainRateLimitService } from ".";
-import { LoggerService } from "dweb-api-logger/dist/index.js";
+import type { SinonStubbedInstance } from "sinon";
+import { createStubInstance } from "sinon";
+import type { IRequestContext } from "dweb-api-types/request-context";
+import type { IRedisClient } from "dweb-api-types/redis";
+import type { ILoggerService } from "dweb-api-types/logger";
+import { RedisClient } from "dweb-api-cache";
+import { DomainRateLimitService } from "./index.js";
+import { LoggerService } from "dweb-api-logger";
 
 describe("DomainRateLimitService", () => {
   let redisClient: SinonStubbedInstance<IRedisClient>;

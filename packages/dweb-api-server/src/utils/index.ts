@@ -1,7 +1,7 @@
 import { Request } from "express";
-import { punycodeDomainPartsToUnicode } from "./punycodeConverter";
-import { VALID_ENS_TLDS } from "../configuration";
-import { IHostnameSubstitutionService } from "dweb-api-resolver/dist/HostnameSubstitutionService/index";
+import { punycodeDomainPartsToUnicode } from "dweb-api-resolver/punycodeConverter";
+import { VALID_ENS_TLDS } from "../configuration/index.js";
+import { IHostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
 
 export type GetDomainOfRequestFromGetReturnType = {
   domain: string;

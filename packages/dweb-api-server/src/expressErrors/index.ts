@@ -1,4 +1,4 @@
-import { Response } from "express";
+import type { Response } from "express";
 
 export function noContentHashSet(res: Response) {
   res.writeHead(404, {

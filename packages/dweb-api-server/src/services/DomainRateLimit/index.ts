@@ -1,6 +1,6 @@
-import { IRedisClient } from "dweb-api-types/dist/redis";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
+import type { IRedisClient } from "dweb-api-types/redis";
+import type { ILoggerService } from "dweb-api-types/logger";
+import type { IRequestContext } from "dweb-api-types/request-context";
 
 export interface IDomainRateLimitServiceRet {
   countOverMax: boolean;
@@ -34,7 +34,7 @@ export class DomainRateLimitService implements IDomainRateLimitService {
   ): Promise<IDomainRateLimitServiceRet> {
     const key = `rate_limit/${domain}`;
     const count = await this._redisClient.incr(key);
-    var ttl = await this._redisClient.ttl(key);
+    let ttl = await this._redisClient.ttl(key);
     this._logger.debug("Rate limit incremented", {
       ...request,
       origin: "DomainRateLimitService",

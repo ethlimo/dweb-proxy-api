@@ -3,5 +3,8 @@
   "spec": ["src/**/*.spec.*"],
   "require": ["ts-node/register"],
   "loader": "ts-node/esm",
-  "timeout": 2000
+  "timeout": 2000,
+  "env": {
+    "TS_NODE_PROJECT": "./tsconfig.spec.json"
+  }
 }

@@ -2,38 +2,35 @@ import { describe } from "mocha";
 import { expect } from "chai";
 // @ts-ignore //bug with parsing the type assertion
 import cases from "./cases.json" with { type: "json" };
-import { Server as ProxyServer } from "../server/index";
+import { Server as ProxyServer } from "../server/index.js";
 import {
   RequestMethod,
   RequestOptions,
   createRequest,
   createResponse,
 } from "node-mocks-http";
-import { TestRunner, cartesianProduct } from "./TestCaseGenerator";
+import { TestRunner, cartesianProduct } from "./TestCaseGenerator.js";
 import EventEmitter from "events";
 import { Request, Response } from "express";
 import { ParamsDictionary } from "express-serve-static-core";
 import { ParsedQs } from "qs";
-import { IRequestContext } from "dweb-api-types/dist/request-context.js";
-import { TestResolverService } from "./TestResolverService";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { TestResolverService } from "./TestResolverService.js";
 import { createApplicationConfigurationBindingsManager } from "../dependencies/services.js";
-import { TestConfigurationService } from "../configuration";
+import { TestConfigurationService } from "../configuration/index.js";
 import {
   IDomainQueryService,
   TestDomainQuerySuperagentService,
-} from "../services/DomainsQueryService";
-import { EnvironmentConfiguration } from "../dependencies/BindingsManager";
-import { IDnsQuery } from "../dnsquery";
-import { IDomainRateLimitService } from "../services/DomainRateLimit";
-import { IEnsResolverService } from "dweb-api-types/dist/ens-resolver";
-import { getPeerId } from "dweb-api-resolver/dist/resolver/index";
-import { normalizeUrlFragmentForIpfsSubdomainGateway } from "dweb-api-resolver/dist/resolver/utils";
-import { IHostnameSubstitutionService } from "dweb-api-resolver/dist/HostnameSubstitutionService/index";
-import {
-  TestLaggyRedisClientProxy,
-  TestRedisClient,
-} from "dweb-api-cache/dist";
-import { TestLoggerService } from "dweb-api-logger/dist/index";
+} from "../services/DomainsQueryService/index.js";
+import { EnvironmentConfiguration } from "../dependencies/BindingsManager.js";
+import { IDnsQuery } from "../dnsquery/index.js";
+import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
+import { IEnsResolverService } from "dweb-api-types/ens-resolver";
+import { getPeerId } from "dweb-api-resolver/resolver";
+import { normalizeUrlFragmentForIpfsSubdomainGateway } from "dweb-api-resolver/resolver/utils";
+import { IHostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
+import { TestLaggyRedisClientProxy, TestRedisClient } from "dweb-api-cache";
+import { TestLoggerService } from "dweb-api-logger";
 
 type HarnessType = {
   configurationService: TestConfigurationService;
@@ -50,43 +47,44 @@ type HarnessType = {
   ensResolverService: IEnsResolverService;
 };
 
-let buildAppContainer = (): HarnessType => {
-  const services = createApplicationConfigurationBindingsManager();
+let buildAppContainer = async (): Promise<HarnessType> => {
+  const services = await createApplicationConfigurationBindingsManager();
   return {
-    configurationService: services.configuration.getBinding(
+    configurationService: (await services.configuration.getBinding(
       EnvironmentConfiguration.Development,
-    ) as TestConfigurationService,
-    dnsQueryService: services.dnsQuery.getBinding(
-      EnvironmentConfiguration.Development,
-    ),
-    domainRateLimit: services.domainRateLimit.getBinding(
+    )) as TestConfigurationService,
+    dnsQueryService: await services.dnsQuery.getBinding(
       EnvironmentConfiguration.Development,
     ),
-    hostnameSubstitionService: services.hostnameSubstitution.getBinding(
+    domainRateLimit: await services.domainRateLimit.getBinding(
       EnvironmentConfiguration.Development,
     ),
-    testEnsService: services.ensService.getBinding(
-      EnvironmentConfiguration.Development,
-    ) as TestResolverService,
-    web3NameSdkService: services.web3NameSdk.getBinding(
-      EnvironmentConfiguration.Development,
-    ) as TestResolverService,
-    testArweaveResolverService: services.arweaveResolver.getBinding(
-      EnvironmentConfiguration.Development,
-    ) as TestResolverService,
-    testDomainQuerySuperagentService: services.domainQuerySuperagent.getBinding(
-      EnvironmentConfiguration.Development,
-    ) as TestDomainQuerySuperagentService,
-    domainQueryService: services.domainQuery.getBinding(
+    hostnameSubstitionService: await services.hostnameSubstitution.getBinding(
       EnvironmentConfiguration.Development,
     ),
-    testLoggerService: services.logger.getBinding(
+    testEnsService: (await services.ensService.getBinding(
       EnvironmentConfiguration.Development,
-    ) as TestLoggerService,
-    redisClient: services.redisClient.getBinding(
+    )) as TestResolverService,
+    web3NameSdkService: (await services.web3NameSdk.getBinding(
       EnvironmentConfiguration.Development,
-    ) as TestRedisClient,
-    ensResolverService: services.ensResolver.getBinding(
+    )) as TestResolverService,
+    testArweaveResolverService: (await services.arweaveResolver.getBinding(
+      EnvironmentConfiguration.Development,
+    )) as TestResolverService,
+    testDomainQuerySuperagentService:
+      (await services.domainQuerySuperagent.getBinding(
+        EnvironmentConfiguration.Development,
+      )) as TestDomainQuerySuperagentService,
+    domainQueryService: await services.domainQuery.getBinding(
+      EnvironmentConfiguration.Development,
+    ),
+    testLoggerService: (await services.logger.getBinding(
+      EnvironmentConfiguration.Development,
+    )) as TestLoggerService,
+    redisClient: (await services.redisClient.getBinding(
+      EnvironmentConfiguration.Development,
+    )) as TestRedisClient,
+    ensResolverService: await services.ensResolver.getBinding(
       EnvironmentConfiguration.Development,
     ),
   };
@@ -313,8 +311,8 @@ describe("Proxy API Integration Tests", function () {
   var server: ProxyServer;
   var commonSetup: any; //not even the language server can figure out what this is
 
-  beforeEach(() => {
-    let r = buildAppContainer();
+  beforeEach(async function () {
+    let r = await buildAppContainer();
     server = new ProxyServer(
       r.configurationService,
       r.testLoggerService,
@@ -324,6 +322,7 @@ describe("Proxy API Integration Tests", function () {
       r.dnsQueryService,
       r.domainRateLimit,
       r.hostnameSubstitionService,
+      null,
     );
     harnessInput = r;
     commonSetup = harness(harnessInput)({ proxyServer: server });
@@ -689,6 +688,168 @@ describe("Proxy API Integration Tests", function () {
     );
     expect(content_storage_type).to.be.equal("arweave-ns");
   });
+
+  it("should preserve explicit default port 80 for HTTP arweave backend", async () => {
+    // Set arweave backend with explicit default HTTP port 80
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "http://arweave.net:80";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:80",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
+
+  it("should preserve port with URL containing path", async () => {
+    // Set arweave backend with path and explicit port
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://arweave.net:443/gateway";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:443/gateway",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
+
+  it("should preserve port with URL containing query parameters", async () => {
+    // Set arweave backend with query parameters and explicit port
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://arweave.net:8443?key=value";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:8443/?key=value",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
+
+  it("should handle IPv6 addresses with explicit port", async () => {
+    // Set arweave backend with IPv6 address and explicit port
+    // Note: IPv6 addresses cannot have subdomains prepended inside brackets,
+    // so the subdomain operation will fail gracefully and preserve the original IPv6 address
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://[::1]:8443";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    // IPv6 addresses cannot have subdomains prepended, so it remains as-is with the port preserved
+    expect(content_location).to.be.equal("[::1]:8443");
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
+
+  it("should preserve userinfo (username/password) with explicit port", async () => {
+    // Set arweave backend with userinfo and explicit port
+    harnessInput.configurationService.set((conf) => {
+      conf.arweave.backend = "https://user:pass@arweave.net:443";
+    });
+
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "makesy.eth",
+        type: "arweave",
+        contentHash: "arweave://Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+        additionalInfo: {
+          arweave: {
+            result: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            query: "Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g",
+            subdomain_sandbox_id:
+              "dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a",
+          },
+        },
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    // Userinfo should be preserved when explicit port is present
+    expect(content_location).to.be.equal(
+      "user:pass@dlu34g6aqvgcecjb4dksklcazqpwunznwo73jaxafp7w4db3en4a.arweave.net:443",
+    );
+    expect(content_path).to.be.equal(
+      "/Gum-G8CFTCIJIeDVJSxAzB9qNy2zv7SC4Cv_bgw7I3g/",
+    );
+    expect(content_storage_type).to.be.equal("arweave-ns");
+  });
 });
 
 describe("Caddy API Integration Tests", function () {
@@ -696,8 +857,8 @@ describe("Caddy API Integration Tests", function () {
   var server: ProxyServer;
   var commonSetup: any; //not even the language server can figure out what this is
 
-  beforeEach(() => {
-    let r = buildAppContainer();
+  beforeEach(async function () {
+    let r = await buildAppContainer();
     server = new ProxyServer(
       r.configurationService,
       r.testLoggerService,
@@ -707,6 +868,7 @@ describe("Caddy API Integration Tests", function () {
       r.dnsQueryService,
       r.domainRateLimit,
       r.hostnameSubstitionService,
+      null,
     );
     harnessInput = r;
     commonSetup = harness(harnessInput)({ caddyServer: server });
@@ -891,8 +1053,8 @@ describe("DoH GET API Integration Tests", function () {
   var server: ProxyServer;
   var commonSetup: any; //not even the language server can figure out what this is
 
-  beforeEach(() => {
-    let r = buildAppContainer();
+  beforeEach(async function () {
+    let r = await buildAppContainer();
     server = new ProxyServer(
       r.configurationService,
       r.testLoggerService,
@@ -902,6 +1064,7 @@ describe("DoH GET API Integration Tests", function () {
       r.dnsQueryService,
       r.domainRateLimit,
       r.hostnameSubstitionService,
+      null,
     );
     harnessInput = r;
     commonSetup = harness(harnessInput)({ dohServerGetRequest: server });
@@ -913,7 +1076,7 @@ describe("DoH GET API Integration Tests", function () {
     commonSetup = null as any;
   });
 
-  function handleBlacklistBehaviorTest(
+  async function handleBlacklistBehaviorTest(
     testCase: TestCaseType & { options: Options },
     res: Response,
     result: any,
@@ -947,7 +1110,7 @@ describe("DoH GET API Integration Tests", function () {
     },
     async function (testCase) {
       const { _result, res } = await commonSetup(testCase);
-      handleBlacklistBehaviorTest(testCase, res, _result);
+      await handleBlacklistBehaviorTest(testCase, res, _result);
     },
   );
 
@@ -1202,10 +1365,15 @@ async function callPayloadEnsureTotality(
   res: Response<any, Record<string, any>>,
 ): Promise<void> {
   if (isProxyServerPayloadType(payload)) {
-    await payload.proxyServer.proxyServer(req, res);
+    await (payload.proxyServer as ProxyServer).proxyServer(req, res);
   } else if (isCaddyServerPayloadType(payload)) {
-    await payload.caddyServer.caddy(req, res);
+    await (payload.caddyServer as ProxyServer).caddy(req, res);
   } else if (isDohServerGetPayloadType(payload)) {
+    if (
+      typeof payload.dohServerGetRequest._DnsQuery.dnsqueryGet !== "function"
+    ) {
+      console.log("payload.dohServerGetRequest", payload.dohServerGetRequest);
+    }
     await payload.dohServerGetRequest._DnsQuery.dnsqueryGet(req, res);
   } else {
     return payload as never;

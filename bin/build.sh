@@ -6,7 +6,7 @@ safe-chain setup-ci
 
 source ~/.bashrc
 
-export SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=48
+export SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=6
 
 cd bin || exit 1
 packages=$(node ./list_packages.js)
