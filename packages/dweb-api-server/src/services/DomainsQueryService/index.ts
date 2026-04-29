@@ -1,10 +1,11 @@
-import superagent, { Response } from "superagent";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { hostnameIsENSTLD } from "../../utils";
-import { ICacheService } from "dweb-api-types/dist/cache";
+import type { Response } from "superagent";
+import superagent from "superagent";
+import type { ILoggerService } from "dweb-api-types/logger";
+import { hostnameIsENSTLD } from "../../utils/index.js";
+import type { ICacheService } from "dweb-api-types/cache";
 import * as z from "zod";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { IDomainQueryConfig } from "dweb-api-types/dist/config";
+import type { IRequestContext } from "dweb-api-types/request-context";
+import type { IDomainQueryConfig } from "dweb-api-types/config";
 
 //passthrough because we want to preserve the full query response
 const DomainQueryValueCodec = z
@@ -158,13 +159,14 @@ export class DomainQueryService implements IDomainQueryService {
         const json = JSON.parse(ret.text);
         const payload = DomainQueryValueCodec.parse(json);
         return payload;
-      } catch (e) {
+      } catch (e: unknown) {
         this._logger.error("failed to deserialize response", {
           ...request,
           origin: "DomainQueryService",
           context: {
             domain,
             text: ret.text,
+            error: e,
           },
         });
         return createDefaultDomainQueryValue(domain);
@@ -179,7 +181,7 @@ export class DomainQueryService implements IDomainQueryService {
 
     const explode = domain.split(".");
 
-    for (var i = 0; i < explode.length; i++) {
+    for (let i = 0; i < explode.length; i++) {
       const subdomain = explode.slice(i).join(".");
       const query = await this.domainQuery(request, subdomain);
       if (query && query["blacklisted"]) {
@@ -199,12 +201,12 @@ export class DomainQueryService implements IDomainQueryService {
     const configuration = this._configurationService?.getDomainQueryConfig();
     //cycle detection is inbuilt via max_hops, if max_hops is expected to be large then needs hashmap of visited domains
     //if configuration is null, max hops doesn't matter
-    var tries = configuration?.getMaxHops() || 15;
-    var found = false;
+    let tries = configuration?.getMaxHops() || 15;
+    let found = false;
     if (!domain) {
       return null;
     }
-    var search: string | null = domain;
+    let search: string | null = domain;
     do {
       if (!search) {
         break;
@@ -257,7 +259,7 @@ export class TestDomainQuerySuperagentService
           path: "/query",
         },
         text: null,
-      } as any as Response;
+      } as unknown as Response;
     }
     return {
       error: null,
@@ -266,6 +268,6 @@ export class TestDomainQuerySuperagentService
         domain,
         canonical_name: this.canonicalNameMap.get(domain) ?? domain,
       }),
-    } as any as Response;
+    } as unknown as Response;
   };
 }

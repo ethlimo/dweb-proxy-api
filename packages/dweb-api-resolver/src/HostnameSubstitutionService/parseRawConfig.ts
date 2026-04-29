@@ -1,4 +1,4 @@
-import { HostnameSubstitutionConfiguration } from "dweb-api-types/dist/config";
+import { HostnameSubstitutionConfiguration } from "dweb-api-types/config";
 
 export function parseRawConfig(
   rawConfig: string,

@@ -12,6 +12,8 @@
     "license": "MIT",
     "dependencies": {
         "@ensdomains/content-hash": "^3.0.0-beta.5",
+        "@ensdomains/ethers-patch-v6": "0.0.4",
+        "@ethlimo/ens-hooks": "0.1.15",
         "@libp2p/peer-id": "^4.0.9",
         "@web3-name-sdk/core": "^0.2.0",
         "ethers": "^6.13.3",
@@ -35,5 +37,56 @@
         "tsx": "^4.6.1",
         "typescript": "^5.1.3"
     },
-    "type": "module"
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./HostnameSubstitutionService": {
+            "types": "./dist/HostnameSubstitutionService/index.d.ts",
+            "default": "./dist/HostnameSubstitutionService/index.js"
+        },
+        "./HostnameSubstitutionService/parseRawConfig": {
+            "types": "./dist/HostnameSubstitutionService/parseRawConfig.d.ts",
+            "default": "./dist/HostnameSubstitutionService/parseRawConfig.js"
+        },
+        "./resolver": {
+            "types": "./dist/resolver/index.d.ts",
+            "default": "./dist/resolver/index.js"
+        },
+        "./resolver/utils": {
+            "types": "./dist/resolver/utils.d.ts",
+            "default": "./dist/resolver/utils.js"
+        },
+        "./resolver/arweave": {
+            "types": "./dist/resolver/arweave.d.ts",
+            "default": "./dist/resolver/arweave.js"
+        },
+        "./resolver/const": {
+            "types": "./dist/resolver/const.d.ts",
+            "default": "./dist/resolver/const.js"
+        },
+        "./nameservice": {
+            "types": "./dist/nameservice/index.d.ts",
+            "default": "./dist/nameservice/index.js"
+        },
+        "./nameservice/EnsService": {
+            "types": "./dist/nameservice/EnsService.d.ts",
+            "default": "./dist/nameservice/EnsService.js"
+        },
+        "./nameservice/Web3NameSdkService": {
+            "types": "./dist/nameservice/Web3NameSdkService.d.ts",
+            "default": "./dist/nameservice/Web3NameSdkService.js"
+        },
+        "./nameservice/utils": {
+            "types": "./dist/nameservice/utils.d.ts",
+            "default": "./dist/nameservice/utils.js"
+        },
+        "./punycodeConverter": {
+            "types": "./dist/punycodeConverter/index.d.ts",
+            "default": "./dist/punycodeConverter/index.js"
+        }
+    },
+    "types": "./dist/index.d.ts"
 }

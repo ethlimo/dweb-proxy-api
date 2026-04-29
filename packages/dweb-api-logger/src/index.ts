@@ -2,8 +2,8 @@ import { createLogger, format, transports, Logger } from "winston";
 import {
   ILoggerService,
   ILoggerServiceContext,
-} from "dweb-api-types/dist/logger";
-import { IConfigurationLogger } from "dweb-api-types/dist/config";
+} from "dweb-api-types/logger";
+import { IConfigurationLogger } from "dweb-api-types/config";
 
 export class LoggerService implements ILoggerService {
   _configurationService: IConfigurationLogger;

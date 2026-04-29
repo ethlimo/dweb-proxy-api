@@ -7,7 +7,6 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "baseUrl": "src",
     "lib": ["DOM", "ES2020"],
   }
 }

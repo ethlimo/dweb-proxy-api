@@ -1,27 +1,33 @@
-import express, { Request, Response } from "express";
-import {
+import type { Request, Response } from "express";
+import express from "express";
+import type {
   IEnsResolverService,
   IEnsResolverServiceResolveEnsRet,
   IRecord,
-} from "dweb-api-types/dist/ens-resolver";
+} from "dweb-api-types/ens-resolver";
 import bodyParser from "body-parser";
 import {
   notSupported,
   blockedForLegalReasons,
   noContentHashSet,
-} from "../expressErrors";
+} from "../expressErrors/index.js";
 import cors from "cors";
-import { IDomainQueryService } from "../services/DomainsQueryService";
-import { punycodeDomainPartsToUnicode } from "../utils/punycodeConverter";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { IDnsQuery } from "../dnsquery";
-import { IArweaveResolver } from "dweb-api-types/dist/arweave";
-import { getDomainOfRequestFromGet, getTraceIdFromRequest } from "../utils";
-import { IDomainRateLimitService } from "../services/DomainRateLimit";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { recordToProxyRecord } from "dweb-api-resolver/dist/resolver/utils";
-import { ServerConfiguration } from "../configuration";
-import { IHostnameSubstitutionService } from "dweb-api-resolver/dist/HostnameSubstitutionService/index";
+import { IDomainQueryService } from "../services/DomainsQueryService/index.js";
+import { ILoggerService } from "dweb-api-types/logger";
+import { IDnsQuery } from "../dnsquery/index.js";
+import { IArweaveResolver } from "dweb-api-types/arweave";
+import { getDomainOfRequestFromGet, getTraceIdFromRequest } from "../utils/index.js";
+import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
+import { IRequestContext } from "dweb-api-types/request-context";
+import {
+  ensureTrailingSlash,
+  recordToProxyRecord,
+} from "dweb-api-resolver/resolver/utils";
+import { ServerConfiguration } from "../configuration/index.js";
+import { IHostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitutionService";
+import { IDataUrlResolverService } from "dweb-api-types/name-service";
+import { ProxyRecord } from "dweb-api-types/dweb-api-resolver";
+import { type Server as NodeHttpServer } from "http";
 
 interface ProxyServerErrorNotSupported {
   _type: "ProxyServerNotSupported";
@@ -57,7 +63,7 @@ const proxyExpress = express();
 
 dnsqueryExpress.use(cors());
 
-export class Server {
+export class SharedServer {
   _configurationService: ServerConfiguration;
   _logger: ILoggerService;
   _domainQueryService: IDomainQueryService;
@@ -66,6 +72,7 @@ export class Server {
   _arweaveResolver: IArweaveResolver;
   _domainRateLimitService: IDomainRateLimitService;
   _hostnameSubstitutionService: IHostnameSubstitutionService;
+  _dataUrlResolverService: IDataUrlResolverService | null;
 
   constructor(
     configurationService: ServerConfiguration,
@@ -76,6 +83,7 @@ export class Server {
     dnsQuery: IDnsQuery,
     domainRateLimitService: IDomainRateLimitService,
     hostnameSubstitutionService: IHostnameSubstitutionService,
+    dataUrlResolverService: IDataUrlResolverService | null,
   ) {
     this._configurationService = configurationService;
     this._logger = logger;
@@ -85,6 +93,7 @@ export class Server {
     this._DnsQuery = dnsQuery;
     this._domainRateLimitService = domainRateLimitService;
     this._hostnameSubstitutionService = hostnameSubstitutionService;
+    this._dataUrlResolverService = dataUrlResolverService;
   }
 
   requestHandler = async (
@@ -104,13 +113,7 @@ export class Server {
       notSupported(res);
       return;
     }
-    if (
-      content._tag === "ens-socials-redirect" ||
-      content.codec === "ipfs-ns" ||
-      content.codec === "ipns-ns" ||
-      content.codec === "arweave-ns" ||
-      content.codec === "swarm"
-    ) {
+    if (content._tag === "ens-socials-redirect" || content._tag === "Record") {
       const proxyContent = await recordToProxyRecord(
         request,
         this._configurationService,
@@ -142,27 +145,21 @@ export class Server {
         return;
       }
 
-      const xContentLocation = proxyContent.XContentLocation.replace(
-        /\/+$/,
-        "",
-      ); // remove trailing slashes
-      const xContentLocationWithoutProtocol = xContentLocation.replace(
-        /^[^:]+:\/\//,
-        "",
-      ); // remove protocol
+      const sanitizedXContentLocation =
+        extractSanitizedXContentLocationFromRecord(proxyContent); // remove protocol
 
       this._logger.debug("proxying content", {
         ...request,
         origin: "requestHandler",
         context: {
           host: req.get("host"),
-          location: xContentLocationWithoutProtocol,
+          location: sanitizedXContentLocation,
           path: proxyContent.XContentPath,
         },
       });
 
       res.writeHead(200, {
-        "X-Content-Location": xContentLocationWithoutProtocol,
+        "X-Content-Location": sanitizedXContentLocation,
         "X-Content-Path": proxyContent.XContentPath,
         "X-Content-Storage-Type":
           content._tag === "ens-socials-redirect"
@@ -171,29 +168,97 @@ export class Server {
       });
       res.end();
       return;
+    } else if (content._tag === "DataUriRecord") {
+      //feature flag borrows/shared from DataUrl backend server
+      const dataUrlConfig = this._configurationService
+        .getDataUrlConfig()
+        .getConfigDataUrlEndpoint();
+      if (!dataUrlConfig) {
+        this._logger.debug(
+          "no data url config (DataUri feature gated behind DataUrl server config)",
+          {
+            ...request,
+            origin: "requestHandler",
+            context: {
+              host: req.get("host"),
+            },
+          },
+        );
+        notSupported(res);
+        return;
+      }
+      this._logger.debug("data uri record", {
+        ...request,
+        origin: "requestHandler",
+        context: {
+          host: req.get("host"),
+          uri: content.uri,
+        },
+      });
+      res.writeHead(308, {
+        Location: content.uri,
+      });
+      res.end();
+      return;
+    } else if (content._tag === "DataUrlRecord") {
+      const dataUrlConfig = this._configurationService
+        .getDataUrlConfig()
+        .getConfigDataUrlEndpoint();
+      if (!dataUrlConfig) {
+        this._logger.debug(
+          "no data url config (DataUrl feature gated behind DataUrl server config)",
+          {
+            ...request,
+            origin: "requestHandler",
+            context: {
+              host: req.get("host"),
+            },
+          },
+        );
+        notSupported(res);
+        return;
+      }
+      this._logger.debug("data url record", {
+        ...request,
+        origin: "requestHandler",
+        context: {
+          host: req.get("host"),
+          ensname: content.ensname,
+          data: content.data,
+        },
+      });
+      if (!this._dataUrlResolverService) {
+        throw "DataUrlResolverService is null and should not be, maybe bad instantiation of base class?";
+      }
+
+      const data = content.data;
+      const contentFrag = `/api/v1/dataurl/${encodeURIComponent(content.ensname)}/${Buffer.from(JSON.stringify(data)).toString("base64url")}`;
+      const newEndpoint = new URL(dataUrlConfig);
+      res.writeHead(200, {
+        "X-Content-Location": sanitizeXContentLocation(newEndpoint.host),
+        "X-Content-Path": ensureTrailingSlash(contentFrag),
+      });
+      res.end();
+      return;
     }
 
-    let _exhaustiveCheck: never = content.codec;
+    const _exhaustiveCheck: never = content;
     return _exhaustiveCheck;
   };
-  parseHostnameFromRequest = (req: Request, res: Response) => {
+
+  parseHostnameFromRequest = (req: Request) => {
     const host = req.headers["host"];
     if (!host) {
       throw "Unexpected host header not set";
     }
-    let hostHeader = host.split(":")[0];
-    let hostname: string | null = punycodeDomainPartsToUnicode(hostHeader);
-    if (!hostname) {
-      throw "unexpected null hostname";
-    }
-    hostname = this._hostnameSubstitutionService.substituteHostname(hostname);
-    return hostname;
+    let hostFromHeader = host.split(":")[0];
+    return this._hostnameSubstitutionService.substituteHostname(hostFromHeader);
   };
   proxyServerLogic = async (
     request: IRequestContext,
     unprocessedHostname: string,
   ): Promise<ProxyServerLogicRet> => {
-    var hostname;
+    let hostname;
     try {
       hostname = await this._domainQueryService.checkLinkedDomains(
         request,
@@ -218,7 +283,7 @@ export class Server {
         _type: "ProxyServerNotSupported",
       };
     }
-    var blacklisted = false;
+    let blacklisted = false;
     try {
       blacklisted = await this._domainQueryService.checkBlacklist(
         request,
@@ -243,7 +308,10 @@ export class Server {
         _type: "ProxyServerErrorBlacklisted",
       };
     }
-    let location = await this._ensResolverService.resolveEns(request, hostname);
+    const location = await this._ensResolverService.resolveEns(
+      request,
+      hostname,
+    );
     this._logger.debug("resolved ens", {
       ...request,
       origin: "proxyServerLogic",
@@ -264,10 +332,12 @@ export class Server {
       };
     }
   };
+}
 
+export class Server extends SharedServer {
   proxyServer = async (req: Request, res: Response): Promise<null> => {
-    var hostname: string | null = this.parseHostnameFromRequest(req, res);
-    var isError: ProxyServerLogicRet;
+    const hostname: string | null = this.parseHostnameFromRequest(req);
+    let isError: ProxyServerLogicRet;
     const trace_id = getTraceIdFromRequest(req);
     const request: IRequestContext = {
       trace_id,
@@ -283,7 +353,7 @@ export class Server {
           hostname: hostname,
         },
       });
-      res.status(500);
+      res.writeHead(500);
       res.end();
       return null;
     }
@@ -316,7 +386,7 @@ export class Server {
             hostname: hostname,
           },
         });
-        res.status(500);
+        res.writeHead(500);
         res.end();
         return null;
       }
@@ -333,7 +403,7 @@ export class Server {
       return null;
     }
 
-    let _exhaustiveCheck: never = isError;
+    const _exhaustiveCheck: never = isError;
     return _exhaustiveCheck;
   };
   /*
@@ -398,13 +468,13 @@ export class Server {
             hostname: hostname,
           },
         });
-        res.status(429);
+        res.writeHead(429);
         res.end();
         return null;
       }
     }
 
-    var isError: ProxyServerLogicRet;
+    let isError: ProxyServerLogicRet;
     try {
       isError = await this.proxyServerLogic(request, hostname);
     } catch (e) {
@@ -416,7 +486,7 @@ export class Server {
           error: e,
         },
       });
-      res.status(500);
+      res.writeHead(500);
       res.end();
       return null;
     }
@@ -429,7 +499,7 @@ export class Server {
         notSupported(res);
         return null;
       } else if (isError._type === "ProxyServerInternalServerError") {
-        res.status(500);
+        res.writeHead(500);
         res.end();
         return null;
       }
@@ -439,58 +509,43 @@ export class Server {
           !isError.ret.resolverExists) &&
         !socialsEndpointConfig.getEnsSocialsEndpoint
       ) {
-        res.status(404);
+        res.writeHead(404);
       } else {
-        res.status(200);
+        res.writeHead(200);
       }
       res.end();
       return null;
     }
     return isError; //this should be of type never, otherwise there's an unexhausted codepath
   };
-  start = () => {
+  start = (registerServer: (server: NodeHttpServer) => void = () => {}) => {
     const routerConfig = this._configurationService.getRouterConfig();
     const dnsqueryRouterConfig =
       this._configurationService.getDnsqueryRouterConfig();
     const askRouterConfig = this._configurationService.getAskRouterConfig();
-    proxyExpress.all("*", this.proxyServer.bind(this));
-    proxyExpress.listen(routerConfig.getRouterListenPort());
+
+    proxyExpress.all("/{*splat}", this.proxyServer.bind(this));
+    const proxyServer = proxyExpress.listen(routerConfig.getRouterListenPort());
+    registerServer(proxyServer);
+
     dnsqueryExpress.post(
       "/dns-query",
       [bodyParser.raw({ type: "application/dns-message", limit: "2kb" })],
       async (req: Request, res: Response) => {
-        await this._DnsQuery.dnsqueryPost(req, res).catch((e) => {
-          this._logger.error("caught error in dnsqueryPost", {
-            trace_id: getTraceIdFromRequest(req),
-            origin: "dnsqueryPost",
-            context: {
-              error: e,
-            },
-          });
-          res.status(500);
-          res.end();
-        });
+        await this._DnsQuery.dnsqueryPost(req, res);
       },
     );
+
     dnsqueryExpress.get(
       "/dns-query",
       [bodyParser.json({ limit: "2kb" })],
       async (req: Request, res: Response) => {
-        await this._DnsQuery.dnsqueryGet(req, res).catch((e) => {
-          this._logger.error("caught error in dnsqueryGet", {
-            trace_id: getTraceIdFromRequest(req),
-            origin: "dnsqueryGet",
-            context: {
-              error: e,
-            },
-          });
-          res.status(500);
-          res.end();
-        });
+        await this._DnsQuery.dnsqueryGet(req, res);
       },
     );
+
     if (dnsqueryRouterConfig.getDnsqueryRouterEnabled()) {
-      dnsqueryExpress.listen(
+      const dnsServer = dnsqueryExpress.listen(
         dnsqueryRouterConfig.getDnsqueryRouterListenPort(),
         () => {
           this._logger.info("DNS query server started", {
@@ -502,11 +557,14 @@ export class Server {
           });
         },
       );
+      registerServer(dnsServer);
     }
-    switch (askRouterConfig.getAskRouterEnabled()) {
-      case true:
-        askExpress.get("/ask", this.caddy.bind(this));
-        askExpress.listen(askRouterConfig.getAskRouterListenPort(), () => {
+
+    if (askRouterConfig.getAskRouterEnabled()) {
+      askExpress.get("/ask", this.caddy.bind(this));
+      const askServer = askExpress.listen(
+        askRouterConfig.getAskRouterListenPort(),
+        () => {
           this._logger.info("Ask server started", {
             trace_id: "UNDEFINED_TRACE_ID",
             origin: "start",
@@ -514,8 +572,19 @@ export class Server {
               listen: askRouterConfig.getAskRouterListenPort(),
             },
           });
-        });
-        break;
+        },
+      );
+      registerServer(askServer);
     }
   };
+}
+
+function sanitizeXContentLocation(xContentLocation: string) {
+  const tmp = xContentLocation.replace(/\/+$/, ""); // remove trailing slashes
+  return tmp.replace(/^[^:]+:\/\//, ""); // remove protocol
+}
+function extractSanitizedXContentLocationFromRecord(
+  proxyContent: IRecord & ProxyRecord,
+) {
+  return sanitizeXContentLocation(proxyContent.XContentLocation);
 }

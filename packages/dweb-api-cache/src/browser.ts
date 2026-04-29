@@ -1,6 +1,6 @@
-import { ICacheService } from "dweb-api-types/dist/cache.js";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { ILoggerService } from "dweb-api-types/dist/logger";
+import { ICacheService } from "dweb-api-types/cache";
+import { IRequestContext } from "dweb-api-types/request-context";
+import { ILoggerService } from "dweb-api-types/logger";
 import { ZodType } from "zod";
 
 export const DEFAULT_TTL = 24 * 60 * 60 * 1000; // 1 day in milliseconds

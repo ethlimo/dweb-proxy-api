@@ -1,18 +1,32 @@
 import { FallbackProvider, JsonRpcProvider, AbstractProvider } from "ethers";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { INameService } from "dweb-api-types/dist/name-service";
+import { ILoggerService } from "dweb-api-types/logger";
+import { IRequestContext } from "dweb-api-types/request-context";
+import {
+  DecodedCodecString,
+  DecodedDataUri,
+  DecodedDataUrl,
+  IDataUrlResolverService,
+  IEnsServiceDataUrlRet,
+  INameService,
+} from "dweb-api-types/name-service";
 import {
   IConfigurationEthereum,
   IConfigurationEthereumFailover,
-} from "dweb-api-types/dist/config";
+} from "dweb-api-types/config";
 import { getContentHashFallback } from "./utils.js";
+import { Interface } from "ethers";
+import { ICacheService } from "dweb-api-types/cache";
+import { executeHook } from "@ethlimo/ens-hooks";
+import { RecordEntryDecodedEIP8121Hook } from "dweb-api-types/ens-resolver";
+// Side-effect import: patches ethers v6 to add ENSv2 support.
+import "@ensdomains/ethers-patch-v6";
+
 const getEnsContentHash = async (
   request: IRequestContext,
   provider: AbstractProvider,
   logger: ILoggerService,
   name: string,
-): Promise<string | null> => {
+): Promise<DecodedCodecString | DecodedDataUri | DecodedDataUrl | null> => {
   const res = await provider.getResolver(name);
   if (!res) {
     logger.debug("no resolver", {
@@ -26,7 +40,13 @@ const getEnsContentHash = async (
   }
   try {
     const contentHash = await res.getContentHash();
-    return contentHash;
+    return (
+      (contentHash && {
+        _tag: "DecodedCodecString",
+        codec: contentHash,
+      }) ||
+      null
+    );
   } catch (e: any) {
     if (e?.code === "UNSUPPORTED_OPERATION" && e?.info?.data) {
       logger.debug("entering fallback", {
@@ -50,16 +70,22 @@ const getEnsContentHash = async (
   }
 };
 
-export class EnsService implements INameService {
+export class EnsService implements INameService, IDataUrlResolverService {
   _configurationService: IConfigurationEthereum &
     Partial<IConfigurationEthereumFailover>;
   provider: FallbackProvider;
   _logger: ILoggerService;
+  _cacheService: ICacheService;
+
+  chainid: number | undefined;
+
   constructor(
     configurationService: IConfigurationEthereum &
       Partial<IConfigurationEthereumFailover>,
+    cacheService: ICacheService,
     logger: ILoggerService,
   ) {
+    this._cacheService = cacheService;
     this._configurationService = configurationService;
     const ethereumConfig =
       this._configurationService.getConfigEthereumBackend();
@@ -103,7 +129,7 @@ export class EnsService implements INameService {
         origin: "EnsService",
       });
       providers.push(
-        new JsonRpcProvider(secondary_failover, undefined, {
+        new JsonRpcProvider(secondary_failover, ethereumConfig.getChainId(), {
           staticNetwork: true,
         }),
       );
@@ -123,14 +149,20 @@ export class EnsService implements INameService {
       };
     });
 
-    this.provider = new FallbackProvider(providers_as_config, quorum);
+    this.provider = new FallbackProvider(
+      providers_as_config,
+      ethereumConfig.getChainId(),
+      {
+        quorum: quorum,
+      },
+    );
     this._logger = logger;
   }
 
   async getContentHash(
     request: IRequestContext,
     name: string,
-  ): Promise<string | null> {
+  ): Promise<DecodedCodecString | DecodedDataUri | DecodedDataUrl | null> {
     const res = await getEnsContentHash(
       request,
       this.provider,
@@ -138,5 +170,66 @@ export class EnsService implements INameService {
       name,
     );
     return res;
+  }
+  async init(): Promise<void> {
+    const chainid = await this.provider.getNetwork().then((network) => {
+      return network.chainId;
+    });
+    this.chainid = Number(chainid);
+  }
+  getChainId(): number {
+    if (this.chainid === undefined) {
+      throw new Error("Chain ID not set. Please call init() first.");
+    }
+    return this.chainid;
+  }
+
+  resolveInterface: Interface = new Interface([]);
+
+  async resolveDataUrl(
+    request: IRequestContext,
+    decodedDataUrl: RecordEntryDecodedEIP8121Hook,
+  ): Promise<IEnsServiceDataUrlRet> {
+    this._logger.debug("resolveDataUrl", {
+      ...request,
+      origin: "resolveDataUrl",
+      context: {
+        decodedDataUrl,
+      },
+    });
+
+    if (decodedDataUrl.data.target.chainId !== this.getChainId()) {
+      throw new Error(`ENS Data URL hook execution failed: chainId mismatch`);
+    }
+
+    const ret = await executeHook(decodedDataUrl.data, {
+      providerMap: new Map([[this.getChainId(), this.provider]]),
+    });
+
+    if (ret._tag === "HookExecutionError") {
+      this._logger.debug("resolveDataUrl - hook execution error", {
+        ...request,
+        origin: "resolveDataUrl",
+        context: {
+          decodedDataUrl,
+          error: ret,
+        },
+      });
+      throw new Error(`ENS Data URL hook execution failed: ${ret.message}`);
+    } else {
+      ret.data;
+    }
+
+    this._logger.debug("resolveDataUrl", {
+      ...request,
+      origin: "resolveDataUrl",
+      context: {
+        decodedDataUrl,
+      },
+    });
+    return {
+      _tag: "ens-dataurl",
+      data: ret.data,
+    };
   }
 }

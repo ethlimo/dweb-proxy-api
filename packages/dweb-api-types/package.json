@@ -8,5 +8,55 @@
     },
     "author": "eth.limo team",
     "license": "MIT",
-    "type": "module"
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./arweave": {
+            "types": "./dist/arweave.d.ts",
+            "default": "./dist/arweave.js"
+        },
+        "./cache": {
+            "types": "./dist/cache.d.ts",
+            "default": "./dist/cache.js"
+        },
+        "./config": {
+            "types": "./dist/config.d.ts",
+            "default": "./dist/config.js"
+        },
+        "./dweb-api-resolver": {
+            "types": "./dist/dweb-api-resolver.d.ts",
+            "default": "./dist/dweb-api-resolver.js"
+        },
+        "./ens-resolver": {
+            "types": "./dist/ens-resolver.d.ts",
+            "default": "./dist/ens-resolver.js"
+        },
+        "./kubo-api": {
+            "types": "./dist/kubo-api.d.ts",
+            "default": "./dist/kubo-api.js"
+        },
+        "./logger": {
+            "types": "./dist/logger.d.ts",
+            "default": "./dist/logger.js"
+        },
+        "./name-service": {
+            "types": "./dist/name-service.d.ts",
+            "default": "./dist/name-service.js"
+        },
+        "./redis": {
+            "types": "./dist/redis.d.ts",
+            "default": "./dist/redis.js"
+        },
+        "./request-context": {
+            "types": "./dist/request-context.d.ts",
+            "default": "./dist/request-context.js"
+        }
+    },
+    "types": "./dist/index.d.ts",
+    "dependencies": {
+        "@ethlimo/ens-hooks": "0.1.15"
+    }
 }

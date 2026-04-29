@@ -1,7 +1,7 @@
 import {
   ILoggerService,
   ILoggerServiceContext,
-} from "dweb-api-types/dist/logger";
+} from "dweb-api-types/logger";
 
 export class JsonLoggerService implements ILoggerService {
   private log(

@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1
+
 # Builder
-FROM docker.io/library/node:22-bullseye-slim@sha256:8efd3ed25d83b4328df873ed9853a5bd97ffce8eb3498785e45c3e7297571f0e as build
+FROM docker.io/library/node:24-bookworm-slim@sha256:03eae3ef7e88a9de535496fb488d67e02b9d96a063a8967bae657744ecd513f2 AS build
 
 WORKDIR /build
 
@@ -12,15 +14,14 @@ RUN apt-get update && \
             build-essential \
             ca-certificates && \
     useradd -u 10005 dwebapi && \
-    tail -n 1 /etc/passwd >/etc/passwd.scratch
-
-ENV SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=48
+    tail -n 1 /etc/passwd >/etc/passwd.scratch && \
+    npm install -g npm@10
 
 RUN ./bin/build.sh
 
-FROM gcr.io/distroless/nodejs22-debian12@sha256:3732180ba4a39101bd95b7105ef0c47526c197d6c29c6d48f7059a647a4064a5 as runtime
+FROM gcr.io/distroless/nodejs24-debian13@sha256:482fabdb0f0353417ab878532bb3bf45df925e3741c285a68038fb138b714cba AS runtime
 
-LABEL org.opencontainers.image.source https://github.com/ethlimo/dweb-proxy-api
+LABEL org.opencontainers.image.source="https://github.com/ethlimo/dweb-proxy-api"
 
 WORKDIR /app
 
@@ -33,7 +34,7 @@ COPY --from=build /etc/passwd.scratch /etc/passwd
 
 USER dwebapi
 
-EXPOSE 8080 9090 11000
+EXPOSE 8080 9090 11000 12500
 
 # Node options to use openssl CA certificates
 ENV NODE_OPTIONS="--import=extensionless/register --use-openssl-ca"

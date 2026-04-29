@@ -3,8 +3,8 @@
 services:
   # HTTP ingress router/proxy for all services
   ingress:
-    # https://hub.docker.com/layers/library/caddy/2.11/
-    image: docker.io/library/caddy:2.11@sha256:ab7fee37306738d197c627fe4ef40968bc085d0de28aae43cfa5273556d8445f
+    # https://hub.docker.com/layers/library/caddy/2.11.2/
+    image: docker.io/library/caddy:2.11.2@sha256:25cdc846626b62d05f6b633b9b40c2c9f6ef89b515dc76133cefd920f7dbe562
     entrypoint: ["/bin/sh", "/etc/caddy/custom-entrypoint.sh"]
     pull_policy: missing
     ports:
@@ -67,6 +67,8 @@ services:
       - REDIS_URL=redis://redis:6379
       # Ethereum RPC endpoint
       - ETH_RPC_ENDPOINT=${ETH_RPC_ENDPOINT:-https://ethereum.publicnode.com}
+      # Chain ID if not using mainnet
+      - ETH_CHAIN_ID=${ETH_CHAIN_ID:-1}
       # Enable IPFS subdomain support, i.e. bafy.ipfs.rainbow:8090
       - IPFS_SUBDOMAIN_SUPPORT=true
       # IPFS gateway target URL
@@ -88,6 +90,10 @@ services:
       # Default: {"eth.localhost": "eth", "gno.localhost": "gno"} - must be a base64-encoded JSON object
       - LIMO_HOSTNAME_SUBSTITUTION_CONFIG=${LIMO_HOSTNAME_SUBSTITUTION_CONFIG:-eyJldGgubG9jYWxob3N0IjogImV0aCIsICJnbm8ubG9jYWxob3N0IjogImdubyJ9}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      # Enable DataURL API for on-chain content retreival (see docs for more information)
+      - DATAURL_ENABLED=${DATAURL_ENABLED:-true}
+      - DATAURL_ENDPOINT=http://dweb-proxy-api:12500
+      - DATAURL_PORT=12500
     networks:
       gateway:
         ipv4_address: 172.20.0.53
@@ -117,7 +123,7 @@ services:
 
   redis:
     # https://hub.docker.com/layers/library/redis
-    image: docker.io/library/redis:7.4@sha256:d665ad9dd15a25c100b77134516d4f9f46f06884983d86456f0a9c0434f3b49f
+    image: docker.io/library/redis:7.4@sha256:3e0669e42d4fe421c9dea0ba5fbc04d336b80b4f32a6c7d25bee3a1d089288a1
     pull_policy: missing
     volumes:
       - redis_data:/data
@@ -145,7 +151,7 @@ services:
   # https://github.com/ipfs/rainbow
   rainbow:
     # https://github.com/ipfs/rainbow/pkgs/container/rainbow
-    image: ghcr.io/ipfs/rainbow:main-latest@sha256:97b2ff556be442747450af76271de332ba0ed700d78f55adebd5df0bd1fb2af0
+    image: ghcr.io/ipfs/rainbow:v1.23.0@sha256:25912a124899e882cfcd5dfeb5df9da77dc2e183f95f9fb7689fdb6b666eae5b
     pull_policy: missing
     environment:
       - RAINBOW_SUBDOMAIN_GATEWAY_DOMAINS=rainbow,localhost

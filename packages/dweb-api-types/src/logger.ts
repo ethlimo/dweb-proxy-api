@@ -8,5 +8,5 @@ export type ILoggerService = {
 export type ILoggerServiceContext = {
   origin: string;
   trace_id: string;
-  context?: Object;
+  context?: Record<string, unknown>;
 };

@@ -1,15 +1,24 @@
-import { errorBuilder, blockedForLegalReasons } from "../expressErrors";
-import dnsPacket, { Question, RecordType } from "dns-packet";
-import { IEnsResolverService, IRecord } from "dweb-api-types/dist/ens-resolver";
-import { Request, Response } from "express";
-import { IDomainQueryService } from "../services/DomainsQueryService";
-import { getTraceIdFromRequest, hostnameIsENSTLD } from "../utils";
-import { ILoggerService } from "dweb-api-types/dist/logger";
-import { IRequestContext } from "dweb-api-types/dist/request-context";
-import { punycodeDomainPartsToUnicode } from "../utils/punycodeConverter";
-import { ICacheConfig, IConfigurationLogger } from "dweb-api-types/dist/config";
-import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/dist/resolver/const";
-
+import {
+  errorBuilder,
+  blockedForLegalReasons,
+} from "../expressErrors/index.js";
+import type { Question, RecordType } from "dns-packet";
+import dnsPacket from "dns-packet";
+import type {
+  IEnsResolverService,
+  IRecord,
+} from "dweb-api-types/ens-resolver";
+import type { Request, Response } from "express";
+import type { IDomainQueryService } from "../services/DomainsQueryService/index.js";
+import { getTraceIdFromRequest, hostnameIsENSTLD } from "../utils/index.js";
+import type { ILoggerService } from "dweb-api-types/logger";
+import type { IRequestContext } from "dweb-api-types/request-context";
+import type {
+  ICacheConfig,
+  IConfigurationLogger,
+} from "dweb-api-types/config";
+import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/resolver/const";
+import { punycodeDomainPartsToUnicode } from "dweb-api-resolver/punycodeConverter";
 type DoHPacket = {
   Status: string;
   TC: boolean;
@@ -85,7 +94,7 @@ export class DnsQuery implements IDnsQuery {
         type: question.type,
       },
     });
-    var dohDomain: string;
+    let dohDomain: string;
     if (question.name.startsWith("_dnslink.")) {
       dohDomain = question.name.split("_dnslink.")[1];
       this._logger.info("handled dnslink prefix", {
@@ -106,13 +115,13 @@ export class DnsQuery implements IDnsQuery {
       punycodeDomainPartsToUnicode(dohDomain),
     );
 
-    var link = recordToDnslink(result.record);
+    const link = recordToDnslink(result.record);
     if (!link) {
       return null;
     }
     const cacheConfig = this._configurationService.getCacheConfig();
     const retData = [];
-    for (var i = 0; i < link.length; i += 255) {
+    for (let i = 0; i < link.length; i += 255) {
       retData.push(link.substring(i, i + 255));
     }
     return {
@@ -126,7 +135,7 @@ export class DnsQuery implements IDnsQuery {
     request: IRequestContext,
     dnsRequest: dnsPacket.Packet,
   ) => {
-    var responses = [];
+    const responses = [];
     if (!dnsRequest.questions) {
       dnsRequest.questions = [];
     }
@@ -139,9 +148,9 @@ export class DnsQuery implements IDnsQuery {
       };
     }
 
-    var srvfail = false;
+    let srvfail = false;
 
-    for (var question of dnsRequest.questions) {
+    for (const question of dnsRequest.questions) {
       const ret = await this.questionToEnsAnswer(request, question);
       if (ret) {
         this._logger.info("response to question", {
@@ -181,8 +190,14 @@ export class DnsQuery implements IDnsQuery {
         code: 200,
         srvfail,
       };
-    } catch (e: any) {
-      this._logger.error("When building dns response packet: ", e);
+    } catch (e: unknown) {
+      this._logger.error("When building dns response packet: ", {
+        ...request,
+        origin: "dnsquery",
+        context: {
+          error: e,
+        },
+      });
       return {
         error: true,
         code: 500,
@@ -211,8 +226,14 @@ export class DnsQuery implements IDnsQuery {
     let dnsRequest;
     try {
       dnsRequest = dnsPacket.decode(Buffer.from(requestBody));
-    } catch (e: any) {
-      this._logger.error("dnsqueryPost: could not decode DNS packet", e);
+    } catch (e: unknown) {
+      this._logger.error("dnsqueryPost: could not decode DNS packet", {
+        ...request,
+        origin: "dnsquery",
+        context: {
+          error: e,
+        },
+      });
       errorBuilder(res, 500);
       return;
     }
@@ -263,7 +284,7 @@ export class DnsQuery implements IDnsQuery {
     }
     if (name) {
       //default to TXT type
-      var q: Question = {
+      const q: Question = {
         name: name,
         type: type as RecordType, //we don't really care if they passed us erroneous data
       };
@@ -299,11 +320,17 @@ export class DnsQuery implements IDnsQuery {
       }
     }
 
-    var result;
+    let result;
     try {
       result = dnsRequest && (await this.handleDnsQuery(request, dnsRequest));
-    } catch (e: any) {
-      this._logger.error("dnsqueryGet: error handling dns query", e);
+    } catch (e: unknown) {
+      this._logger.error("dnsqueryGet: error handling dns query", {
+        ...request,
+        origin: "dnsquery",
+        context: {
+          error: e,
+        },
+      });
       res.writeHead(200);
       const errorPacket: DoHPacket = {
         Question: [],
@@ -316,7 +343,7 @@ export class DnsQuery implements IDnsQuery {
       return;
     }
     if (!result) {
-      res.status(200);
+      res.writeHead(200);
       res.end();
       return;
     }
@@ -324,16 +351,16 @@ export class DnsQuery implements IDnsQuery {
       const data = result.data;
       const decoded = dnsPacket.decode(data);
 
-      var ret: DoHPacket = {
+      const ret: DoHPacket = {
         Status: "0",
         TC: false,
         Question: [],
         Answer: [],
       };
       if (decoded.questions) {
-        for (var q of decoded.questions) {
+        for (const q of decoded.questions) {
           //we only know how to handle txt
-          var decoded_type = null;
+          let decoded_type = null;
           if (q.type === "TXT") {
             decoded_type = 16;
           } else {
@@ -357,11 +384,11 @@ export class DnsQuery implements IDnsQuery {
 
       const cacheConfig = this._configurationService.getCacheConfig();
       if (decoded.answers) {
-        for (var a of decoded.answers) {
+        for (const a of decoded.answers) {
           if (a.type !== "TXT") {
             continue;
           }
-          var tmp: {
+          const tmp: {
             name: string;
             data: string;
             type: number;
@@ -410,21 +437,21 @@ const recordToDnslink = (result: IRecord): string | null => {
     return null;
   } else if (result._tag === "ens-socials-redirect") {
     return null;
-  } else if (
-    result.codec === "ipfs-ns" ||
-    result.codec == "ipns-ns" ||
-    result.codec === "swarm" ||
-    result.codec === "arweave-ns"
-  ) {
-    var dnsLinkPrefix =
+  } else if (result._tag === "Record") {
+    const dnsLinkPrefix =
       result.codec === "arweave-ns"
         ? "ar://"
         : `/${recordNamespaceToUrlHandlerMap[result.codec]}/`;
     return `dnslink=${dnsLinkPrefix}${trimTrailingSlashFromPath(
       result.DoHContentIdentifier,
     )}`;
+  } else if (result._tag === "DataUriRecord") {
+    return null;
+  } else if (result._tag === "DataUrlRecord") {
+    return null;
   }
 
+  const ret: never = result;
   //totality checking, if result.codec is not never that means Record changed
-  return result.codec;
+  return ret;
 };

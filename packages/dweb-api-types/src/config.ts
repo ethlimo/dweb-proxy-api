@@ -26,6 +26,7 @@ export interface IConfigurationSwarm {
 export interface IConfigurationEthereum {
   getConfigEthereumBackend: () => {
     getBackend: () => string;
+    getChainId: () => number;
   };
 }
 
@@ -90,6 +91,7 @@ export interface IAskEndpointConfig {
 export interface IConfigurationServerRouter {
   getRouterConfig: () => {
     getRouterListenPort: () => string;
+    getRouterEnabled: () => boolean;
   };
 }
 export interface IConfigurationServerDnsquery {
@@ -110,5 +112,31 @@ export interface IConfigurationKubo {
     getKuboApiUrl: () => URL | null;
     getKuboTimeoutMs: () => number | null;
     getKuboAuth: () => string | null;
+  };
+}
+
+export interface ICondfigurationDataUrlEndpoint {
+  getDataUrlConfig: () => {
+    getConfigDataUrlEndpoint: () => URL | undefined;
+  };
+}
+
+export interface IConfigurationDataUrlServer {
+  getDataUrlServerConfig: () => {
+    getDataUrlServerListenPort: () => number;
+    getDataUrlMaxLength: () => number;
+    getDataUrlEnabled: () => boolean;
+  };
+}
+
+export interface IClusterConfig {
+  getClusterConfig: () => {
+    getWorkers: () => number;
+    getMaxInflight: () => number;
+    getMaxLagMs: () => number;
+    getOverloadGraceMs: () => number;
+    getNoHeartbeatMs: () => number;
+    getCatastrophicRestarts: () => number;
+    getCatastrophicWindowMs: () => number;
   };
 }

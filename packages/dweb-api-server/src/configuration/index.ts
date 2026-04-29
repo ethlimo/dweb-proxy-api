@@ -1,4 +1,4 @@
-import {
+import type {
   IAskEndpointConfig,
   IConfigHostnameSubstitution,
   IConfigurationArweave,
@@ -16,14 +16,31 @@ import {
   IConfigurationSwarm,
   IConfigurationLogger,
   IConfigurationKubo,
-} from "dweb-api-types/dist/config";
-import { parseRawConfig } from "dweb-api-resolver/dist/HostnameSubstitutionService/parseRawConfig";
+  ICondfigurationDataUrlEndpoint,
+  IConfigurationDataUrlServer,
+  IClusterConfig,
+} from "dweb-api-types/config";
+import { parseRawConfig } from "dweb-api-resolver/HostnameSubstitutionService/parseRawConfig";
 export const VALID_ENS_TLDS = ["eth", "gno", "art"];
+
+/**
+ * Parses a string as a positive integer. Returns `fallback` when the value is
+ * absent, non-numeric, NaN, or less than 1, preventing cluster workers from
+ * being forked with an unusable count.
+ */
+export function parsePositiveInt(
+  raw: string | undefined,
+  fallback: number,
+): number {
+  const n = parseInt(raw ?? "", 10);
+  return Number.isFinite(n) && n >= 1 ? n : fallback;
+}
 
 const configuration = {
   // Ethereum JSON RPC endpoint
   ethereum: {
     rpc: process.env.ETH_RPC_ENDPOINT || "http://192.168.1.7:8845",
+    chainId: parseInt(process.env.ETH_CHAIN_ID || "1"), //we need a chainId for the fallback provider to not fail
     failover_primary: process.env.ETH_RPC_ENDPOINT_FAILOVER_PRIMARY || null,
     failover_secondary: process.env.ETH_RPC_ENDPOINT_FAILOVER_SECONDARY || null,
     provider_stall_timeout_ms: parseInt(
@@ -67,6 +84,7 @@ const configuration = {
   // Proxy
   router: {
     listen: process.env.LISTEN_PORT || 8888,
+    enabled: process.env.ROUTER_ENABLED || "true",
     origin: "LIMO Proxy",
     hostnameSubstitutionConfig:
       process.env.LIMO_HOSTNAME_SUBSTITUTION_CONFIG ||
@@ -74,7 +92,7 @@ const configuration = {
         "eth.limo": "eth",
         "eth.local": "eth",
         "gno.limo": "gno",
-        "gno.local": "gno"
+        "gno.local": "gno",
       }),
   },
   // Server ask endpoint
@@ -112,6 +130,35 @@ const configuration = {
   },
   logging: {
     level: process.env.LOG_LEVEL || "info",
+  },
+  dataurl: {
+    endpoint:
+      (process.env.DATAURL_ENDPOINT && new URL(process.env.DATAURL_ENDPOINT)) ||
+      undefined,
+    server: {
+      port:
+        (process.env.DATAURL_PORT && Number(process.env.DATAURL_PORT)) || 12500,
+      enabled: process.env.DATAURL_ENABLED || "false",
+    },
+    maxLengthOfDataUrlInBytes: 1000000,
+  },
+  cluster: {
+    workers: parsePositiveInt(process.env.CLUSTER_WORKERS, 1),
+    maxInflight: parsePositiveInt(process.env.CLUSTER_MAX_INFLIGHT, 300),
+    maxLagMs: parsePositiveInt(process.env.CLUSTER_MAX_LAG_MS, 750),
+    overloadGraceMs: parsePositiveInt(
+      process.env.CLUSTER_OVERLOAD_GRACE_MS,
+      8000,
+    ),
+    noHeartbeatMs: parsePositiveInt(process.env.CLUSTER_NO_HEARTBEAT_MS, 5000),
+    catastrophicRestarts: parsePositiveInt(
+      process.env.CLUSTER_CATASTROPHIC_RESTARTS,
+      10,
+    ),
+    catastrophicWindowMs: parsePositiveInt(
+      process.env.CLUSTER_CATASTROPHIC_WINDOW_MS,
+      30000,
+    ),
   },
 };
 configuration.ask.rate.enabled = configuration.ask.rate.limit > 0;
@@ -157,6 +204,7 @@ export class TestConfigurationService implements ServerConfiguration {
     this.configuration.ask.rate.period = 30;
     //we choose not to test with this because the default behavior for the kubo service is to die quickly and revert to the regular behavior where kubo is absent
     this.configuration.ipfs.kubo_api_url = undefined;
+    this.configuration.dataurl.endpoint = new URL("https://google.com");
   }
 
   set(callback: (configuration: typeof this.configuration) => void) {
@@ -233,6 +281,18 @@ export class TestConfigurationService implements ServerConfiguration {
 
   getKuboConfiguration = () => {
     return this.getServerConfiguration().getKuboConfiguration();
+  };
+
+  getDataUrlConfig = () => {
+    return this.getServerConfiguration().getDataUrlConfig();
+  };
+
+  getDataUrlServerConfig = () => {
+    return this.getServerConfiguration().getDataUrlServerConfig();
+  };
+
+  getClusterConfig = () => {
+    return this.getServerConfiguration().getClusterConfig();
   };
 }
 
@@ -315,12 +375,14 @@ export const configurationToIConfigurationEnsSocials = (config: {
 export const configurationToIConfigurationEthereum = (config: {
   ethereum: {
     rpc: string;
+    chainId: number;
   };
 }): IConfigurationEthereum => {
   return {
     getConfigEthereumBackend: () => {
       return {
         getBackend: () => config.ethereum.rpc,
+        getChainId: () => config.ethereum.chainId,
       };
     },
   };
@@ -443,6 +505,7 @@ export const configurationToIConfigurationServerRouter = (config: {
   router: {
     listen: string | number;
     origin: string;
+    enabled: string;
   };
 }): IConfigurationServerRouter => {
   return {
@@ -450,6 +513,7 @@ export const configurationToIConfigurationServerRouter = (config: {
       return {
         getRouterListenPort: () => config.router.listen.toString(),
         getRouterOrigin: () => config.router.origin,
+        getRouterEnabled: () => config.router.enabled === "true",
       };
     },
   };
@@ -474,7 +538,7 @@ export const configurationToIConfigurationLogger = (config: {
     level: string;
   };
 }): IConfigurationLogger => {
-  var level = config.logging.level;
+  let level = config.logging.level;
 
   if (
     level != "debug" &&
@@ -535,6 +599,62 @@ export const configurationToIConfigurationKubo = (config: {
   };
 };
 
+export const configurationToIConfigurationDataUrlEndpoint = (config: {
+  dataurl: {
+    endpoint: URL | undefined;
+  };
+}): ICondfigurationDataUrlEndpoint => {
+  return {
+    getDataUrlConfig: () => {
+      return {
+        getConfigDataUrlEndpoint: () => config.dataurl.endpoint,
+      };
+    },
+  };
+};
+
+export const configurationToIConfigurationDataUrlServer = (config: {
+  dataurl: {
+    server: {
+      port: number;
+      enabled: string;
+    };
+    maxLengthOfDataUrlInBytes: number;
+  };
+}): IConfigurationDataUrlServer => {
+  return {
+    getDataUrlServerConfig: () => ({
+      getDataUrlServerListenPort: () => config.dataurl.server.port,
+      getDataUrlMaxLength: () => config.dataurl.maxLengthOfDataUrlInBytes,
+      getDataUrlEnabled: () => config.dataurl.server.enabled === "true",
+    }),
+  };
+};
+
+export const configurationToIClusterConfig = (config: {
+  cluster: {
+    workers: number;
+    maxInflight: number;
+    maxLagMs: number;
+    overloadGraceMs: number;
+    noHeartbeatMs: number;
+    catastrophicRestarts: number;
+    catastrophicWindowMs: number;
+  };
+}): IClusterConfig => {
+  return {
+    getClusterConfig: () => ({
+      getWorkers: () => config.cluster.workers,
+      getMaxInflight: () => config.cluster.maxInflight,
+      getMaxLagMs: () => config.cluster.maxLagMs,
+      getOverloadGraceMs: () => config.cluster.overloadGraceMs,
+      getNoHeartbeatMs: () => config.cluster.noHeartbeatMs,
+      getCatastrophicRestarts: () => config.cluster.catastrophicRestarts,
+      getCatastrophicWindowMs: () => config.cluster.catastrophicWindowMs,
+    }),
+  };
+};
+
 export type ServerConfiguration = IConfigurationServerRouter &
   IConfigurationServerDnsquery &
   IConfigurationServerAsk &
@@ -552,7 +672,10 @@ export type ServerConfiguration = IConfigurationServerRouter &
   IDomainQueryConfig &
   IRedisConfig &
   IConfigurationLogger &
-  IConfigurationKubo;
+  IConfigurationKubo &
+  ICondfigurationDataUrlEndpoint &
+  IConfigurationDataUrlServer &
+  IClusterConfig;
 
 export const configurationToServerConfiguration = (
   config: typeof configuration,
@@ -577,6 +700,9 @@ export const configurationToServerConfiguration = (
     ...configurationToIConfigurationLogger(config),
     ...configurationToIConfigurationIpfs(config),
     ...configurationToIConfigurationKubo(config),
+    ...configurationToIConfigurationDataUrlEndpoint(config),
+    ...configurationToIConfigurationDataUrlServer(config),
+    ...configurationToIClusterConfig(config),
     _innerConfigurationObject: config,
   };
 };

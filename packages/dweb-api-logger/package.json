@@ -8,5 +8,16 @@
     },
     "author": "eth.limo team",
     "license": "MIT",
-    "type": "module"
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./jsonlogger": {
+            "types": "./dist/jsonlogger.d.ts",
+            "default": "./dist/jsonlogger.js"
+        }
+    },
+    "types": "./dist/index.d.ts"
 }

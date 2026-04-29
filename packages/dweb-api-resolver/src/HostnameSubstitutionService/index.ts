@@ -1,8 +1,9 @@
 import {
   HostnameSubstitutionConfiguration,
   IConfigHostnameSubstitution,
-} from "dweb-api-types/dist/config";
-import { ILoggerService } from "dweb-api-types/dist/logger";
+} from "dweb-api-types/config";
+import { ILoggerService } from "dweb-api-types/logger";
+import { punycodeDomainPartsToUnicode } from "../punycodeConverter/index.js";
 
 export interface IHostnameSubstitutionService {
   substituteHostname(hostname: string): string;
@@ -107,11 +108,12 @@ export class HostnameSubstitutionService
         new_url.protocol = "https:";
         var ret;
         ret = new_url.toString().substring("https://".length);
-
         while (ret.endsWith("/") && !url.endsWith("/")) {
           ret = ret.substring(0, ret.length - 1);
         }
-        return ret;
+        const split = ret.split("/");
+        split[0] = punycodeDomainPartsToUnicode(split[0]);
+        return split.join("/");
       }
     }
 
@@ -121,6 +123,17 @@ export class HostnameSubstitutionService
         hostname: host.host,
       },
     });
-    return url;
+
+    const new_url = new URL(host.toString());
+    new_url.host = host.host;
+    new_url.protocol = "https:";
+    var ret;
+    ret = new_url.toString().substring("https://".length);
+    while (ret.endsWith("/") && !url.endsWith("/")) {
+      ret = ret.substring(0, ret.length - 1);
+    }
+    const split = ret.split("/");
+    split[0] = punycodeDomainPartsToUnicode(split[0]);
+    return split.join("/");
   }
 }
