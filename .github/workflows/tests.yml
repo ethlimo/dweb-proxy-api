@@ -17,13 +17,14 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40
         with:
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             github.com:443
             registry.npmjs.org:443
             malware-list.aikido.dev:443
             npm.pkg.github.com:443
             pkg-npm.githubusercontent.com:443      
+            chainid.network:443
       - name: Checkout the repo
         # actions/checkout@v5
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
