@@ -73,6 +73,31 @@
 	}
 }
 
+&(adnl-gateway-http) {
+	reverse_proxy {http.vars.gateway} {
+		rewrite {uri}
+		# Strip leaky headers
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-For
+		header_up Host {http.vars.adnlhost}
+
+		transport http {
+			dial_timeout 30s
+			response_header_timeout 30s
+			expect_continue_timeout 30s
+			read_timeout 30s
+			write_timeout 30s
+		}
+
+		# Gracefully handle 3xx redirects from upstream
+		# i.e. wikipage.eth/wiki/IBM -> wikipage.eth/wiki/IBM/
+		@redirect3xx status 3xx
+		handle_response @redirect3xx {
+			redir {rp.header.Location} permanent
+		}
+	}
+}
+
 # Router for HTTPS upstreams
 &(ipfs-gateway-https) {
 	reverse_proxy {http.vars.gateway} {
@@ -130,6 +155,33 @@
 		header_up -X-Forwarded-Host
 		header_up -X-Forwarded-For
 		header_up Host localhost
+
+		transport http {
+			tls
+			dial_timeout 30s
+			response_header_timeout 30s
+			expect_continue_timeout 30s
+			read_timeout 30s
+			write_timeout 30s
+			tls_timeout 30s
+		}
+
+		# Gracefully handle 3xx redirects from upstream
+		# i.e. wikipage.eth/wiki/IBM -> wikipage.eth/wiki/IBM/
+		@redirect3xx status 3xx
+		handle_response @redirect3xx {
+			redir {rp.header.Location} permanent
+		}
+	}
+}
+
+&(adnl-gateway-https) {
+	reverse_proxy {http.vars.gateway} {
+		rewrite {uri}
+		# Strip leaky headers
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-For
+		header_up Host {http.vars.adnlhost}
 
 		transport http {
 			tls

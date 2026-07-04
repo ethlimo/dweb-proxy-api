@@ -1,6 +1,6 @@
 # ENS dWeb Gateway API
 
-Backend service API for use with reverse proxies to deploy an HTTP [ENS](https://ens.domains)/[GNS](https://genomedomains.com/) gateway capable of resolving [IPFS](https://docs.ipfs.tech/), [IPNS](https://docs.ipfs.tech/how-to/publish-ipns/), [Arweave](https://www.arweave.org/), [Arweave Name System (ArNS)](https://docs.ar.io/arns/#overview), and [Swarm](https://www.ethswarm.org/) content.
+Backend service API for use with reverse proxies to deploy an HTTP [ENS](https://ens.domains)/[GNS](https://genomedomains.com/) gateway capable of resolving [IPFS](https://docs.ipfs.tech/), [IPNS](https://docs.ipfs.tech/how-to/publish-ipns/), [Arweave](https://www.arweave.org/), [Arweave Name System (ArNS)](https://docs.ar.io/arns/#overview), [Swarm](https://www.ethswarm.org/), and [TON Sites](https://docs.ton.org/participate/web3/dns) content.
 
 Upstream proxies can forward ENS and GNS hostnames for resolution and properly route them to the appropriate storage gateway path and destination via the following response headers (IPFS example below):
 
@@ -26,6 +26,7 @@ __Gateway request flow__
 | `IPFS_KUBO_API_URL` | `undefined` | URL to Kubo `/api/v0/name/resolve` service. This setting performs IPNS name resolution and PeerId conversion to CIDv1 identifiers during the contentHash lookup process. Note, this does not enable or disable IPNS support (as this is performed by the IPFS backend) but rather attempts to use resolved CID values as cache keys as opposed to peerIds. Please read the official IPFS [documentation](https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-name-resolve) for more information. |
 | `ARWEAVE_TARGET`     | `"https://arweave.net"` | Arweave gateway FQDN. |
 | `SWARM_TARGET`     | `"https://api.gateway.ethswarm.org"` | Swarm gateway FQDN. |
+| `TON_TARGET`     | `"http://adnl:8080"` | TON gateway root FQDN. Returned in subdomain format, i.e. `${adnlBase32}.adnl:8080`, so `*.adnl` must resolve to an RLDP-HTTP TON proxy. |
 | `IPFS_TARGET` | `http://localhost:8080` | FQDN of IPFS gateway backend to use for requests. |
 | `REDIS_URL`     | `"redis://127.0.0.1:6379"` | Redis server endpoint. |
 | `CACHE_TTL`     | `"300"`      |   TTL to persist resolved records |

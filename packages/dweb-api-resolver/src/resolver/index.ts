@@ -66,6 +66,14 @@ export async function parseRecord(
       DoHContentIdentifier: cleanPath,
       ensName: hostname,
     };
+  } else if (content.startsWith("adnl://")) {
+    const cleanPath = content.split("adnl://")[1];
+    return {
+      _tag: "Record",
+      codec: "adnl",
+      DoHContentIdentifier: cleanPath,
+      ensName: hostname,
+    };
   } else {
     return null;
   }

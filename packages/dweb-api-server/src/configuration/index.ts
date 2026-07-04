@@ -14,6 +14,7 @@ import type {
   IDomainQueryConfig,
   IRedisConfig,
   IConfigurationSwarm,
+  IConfigurationTon,
   IConfigurationLogger,
   IConfigurationKubo,
   ICondfigurationDataUrlEndpoint,
@@ -74,6 +75,9 @@ const configuration = {
   },
   swarm: {
     backend: process.env.SWARM_TARGET || "https://api.gateway.ethswarm.org",
+  },
+  ton: {
+    backend: process.env.TON_TARGET || "http://adnl:8080",
   },
   redis: {
     url: process.env.REDIS_URL || "redis://127.0.0.1:6379",
@@ -188,6 +192,7 @@ export class TestConfigurationService implements ServerConfiguration {
     this.configuration.logging.level = "debug";
     this.configuration.swarm.backend = "https://swarm"; //swarm is never actually queried
     this.configuration.arweave.backend = "https://arweave"; //arweave is never actually queried
+    this.configuration.ton.backend = "http://adnl:8080"; //ton is never actually queried
     this.configuration.ens.socialsEndpoint = (ens: string) => {
       return `https://socials.com?name=${ens}`;
     };
@@ -261,6 +266,10 @@ export class TestConfigurationService implements ServerConfiguration {
 
   getConfigSwarmBackend = () => {
     return this.getServerConfiguration().getConfigSwarmBackend();
+  };
+
+  getConfigTonBackend = () => {
+    return this.getServerConfiguration().getConfigTonBackend();
   };
 
   getLoggerConfig = () => {
@@ -533,6 +542,20 @@ export const configurationToIConfigurationSwarm = (config: {
   };
 };
 
+export const configurationToIConfigurationTon = (config: {
+  ton: {
+    backend: string;
+  };
+}): IConfigurationTon => {
+  return {
+    getConfigTonBackend: () => {
+      return {
+        getBackend: () => config.ton.backend,
+      };
+    },
+  };
+};
+
 export const configurationToIConfigurationLogger = (config: {
   logging: {
     level: string;
@@ -662,6 +685,7 @@ export type ServerConfiguration = IConfigurationServerRouter &
   IConfigurationIpfs &
   IConfigurationArweave &
   IConfigurationSwarm &
+  IConfigurationTon &
   IAskEndpointConfig &
   IConfigHostnameSubstitution &
   IConfigurationEthereum &
@@ -697,6 +721,7 @@ export const configurationToServerConfiguration = (
     ...configurationToIConfigurationServerDnsquery(config),
     ...configurationToIConfigurationServerRouter(config),
     ...configurationToIConfigurationSwarm(config),
+    ...configurationToIConfigurationTon(config),
     ...configurationToIConfigurationLogger(config),
     ...configurationToIConfigurationIpfs(config),
     ...configurationToIConfigurationKubo(config),

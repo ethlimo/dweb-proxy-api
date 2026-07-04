@@ -441,7 +441,9 @@ const recordToDnslink = (result: IRecord): string | null => {
     const dnsLinkPrefix =
       result.codec === "arweave-ns"
         ? "ar://"
-        : `/${recordNamespaceToUrlHandlerMap[result.codec]}/`;
+        : result.codec === "adnl"
+          ? "adnl://"
+          : `/${recordNamespaceToUrlHandlerMap[result.codec]}/`;
     return `dnslink=${dnsLinkPrefix}${trimTrailingSlashFromPath(
       result.DoHContentIdentifier,
     )}`;

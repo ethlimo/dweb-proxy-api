@@ -23,6 +23,12 @@ export interface IConfigurationSwarm {
   };
 }
 
+export interface IConfigurationTon {
+  getConfigTonBackend: () => {
+    getBackend: () => string;
+  };
+}
+
 export interface IConfigurationEthereum {
   getConfigEthereumBackend: () => {
     getBackend: () => string;
