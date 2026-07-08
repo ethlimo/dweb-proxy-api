@@ -112,6 +112,7 @@ export const createConfig = (
     }),
     getConfigTonBackend: () => ({
       getBackend: () => "http://adnl:8080",
+      getEnabled: () => true,
     }),
     getConfigEnsSocialsEndpoint: () => ({
       getEnsSocialsEndpoint: null,

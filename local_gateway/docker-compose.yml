@@ -80,6 +80,8 @@ services:
       - SWARM_TARGET=http://bee:1633
       # TON gateway target URL
       - TON_TARGET=${TON_TARGET:-http://adnl:8080}
+      # Enable TON Site (ADNL) contenthash resolution
+      - TON_ENABLED=${TON_ENABLED:-true}
       # How long to keep domain resolution results cached (in seconds)
       - CACHE_TTL=${CACHE_TTL:-300}
       # HTTPS ingress certificate issuance check (not required for local environments)

@@ -213,6 +213,19 @@ export const recordToProxyRecord = async (
         ),
       };
     } else if (record.codec === "adnl") {
+      if (!tonConfig.getEnabled()) {
+        logger.debug("ADNL resolution is disabled", {
+          ...request,
+          origin: "recordToProxyRecord",
+          context: {
+            record,
+          },
+        });
+        return {
+          _tag: "ProxyRecordUnableToRedirect",
+          record: record,
+        };
+      }
       const hostname = adnlAddressToHostname(record.DoHContentIdentifier);
       if (hostname === null) {
         logger.error("ADNL address can not be encoded as a DNS fragment", {

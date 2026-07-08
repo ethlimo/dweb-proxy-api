@@ -27,6 +27,7 @@ __Gateway request flow__
 | `ARWEAVE_TARGET`     | `"https://arweave.net"` | Arweave gateway FQDN. |
 | `SWARM_TARGET`     | `"https://api.gateway.ethswarm.org"` | Swarm gateway FQDN. |
 | `TON_TARGET`     | `"http://adnl:8080"` | TON gateway root FQDN. Returned in subdomain format, i.e. `${adnlBase32}.adnl:8080`, so `*.adnl` must resolve to an RLDP-HTTP TON proxy. |
+| `TON_ENABLED`     | `"false"` | Enables TON Site (ADNL) contenthash resolution. |
 | `IPFS_TARGET` | `http://localhost:8080` | FQDN of IPFS gateway backend to use for requests. |
 | `REDIS_URL`     | `"redis://127.0.0.1:6379"` | Redis server endpoint. |
 | `CACHE_TTL`     | `"300"`      |   TTL to persist resolved records |

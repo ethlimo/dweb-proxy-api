@@ -78,6 +78,7 @@ const configuration = {
   },
   ton: {
     backend: process.env.TON_TARGET || "http://adnl:8080",
+    enabled: process.env.TON_ENABLED === "true" ? true : false,
   },
   redis: {
     url: process.env.REDIS_URL || "redis://127.0.0.1:6379",
@@ -193,6 +194,7 @@ export class TestConfigurationService implements ServerConfiguration {
     this.configuration.swarm.backend = "https://swarm"; //swarm is never actually queried
     this.configuration.arweave.backend = "https://arweave"; //arweave is never actually queried
     this.configuration.ton.backend = "http://adnl:8080"; //ton is never actually queried
+    this.configuration.ton.enabled = true;
     this.configuration.ens.socialsEndpoint = (ens: string) => {
       return `https://socials.com?name=${ens}`;
     };
@@ -545,12 +547,14 @@ export const configurationToIConfigurationSwarm = (config: {
 export const configurationToIConfigurationTon = (config: {
   ton: {
     backend: string;
+    enabled: boolean;
   };
 }): IConfigurationTon => {
   return {
     getConfigTonBackend: () => {
       return {
         getBackend: () => config.ton.backend,
+        getEnabled: () => config.ton.enabled,
       };
     },
   };
