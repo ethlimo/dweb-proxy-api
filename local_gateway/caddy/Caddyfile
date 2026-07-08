@@ -24,3 +24,4 @@ import ./sites/wildcard.Caddyfile
 import ./sites/ipfs.Caddyfile
 import ./sites/arweave.Caddyfile
 import ./sites/swarm.Caddyfile
+import ./sites/adnl.Caddyfile

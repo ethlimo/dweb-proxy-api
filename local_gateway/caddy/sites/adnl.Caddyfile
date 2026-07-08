@@ -1,0 +1,53 @@
+# Site block for local TON Sites (adnl) gateway
+*.adnl.localhost {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$TON_GATEWAY_HOST}
+		vars adnlhost {labels.2}.adnl
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+
+		handle @https_upstream {
+			invoke adnl-gateway-https
+		}
+
+		handle {
+			invoke adnl-gateway-http
+		}
+	}
+}
+
+# Site block for local TON Sites (adnl) gateway without localhost suffix
+*.adnl {
+	log {
+		level DEBUG
+		format console
+	}
+
+	bind 0.0.0.0
+	encode gzip zstd
+	tls internal
+	import default-headers
+
+	route * {
+		vars gateway {$TON_GATEWAY_HOST}
+		vars adnlhost {labels.1}.adnl
+		@https_upstream expression `{http.vars.gateway}.endsWith(":443")`
+
+		handle @https_upstream {
+			invoke adnl-gateway-https
+		}
+
+		handle {
+			invoke adnl-gateway-http
+		}
+	}
+}

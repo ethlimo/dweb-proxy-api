@@ -16,6 +16,7 @@ import type { IRequestContext } from "dweb-api-types/request-context";
 import type {
   ICacheConfig,
   IConfigurationLogger,
+  IConfigurationTon,
 } from "dweb-api-types/config";
 import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/resolver/const";
 import { punycodeDomainPartsToUnicode } from "dweb-api-resolver/punycodeConverter";
@@ -39,7 +40,7 @@ export interface IDnsQuery {
   dnsqueryGet: (req: Request, res: Response) => Promise<void>;
 }
 
-type conf = IConfigurationLogger & ICacheConfig;
+type conf = IConfigurationLogger & ICacheConfig & IConfigurationTon;
 
 export class DnsQuery implements IDnsQuery {
   _logger: ILoggerService;
@@ -115,7 +116,7 @@ export class DnsQuery implements IDnsQuery {
       punycodeDomainPartsToUnicode(dohDomain),
     );
 
-    const link = recordToDnslink(result.record);
+    const link = recordToDnslink(result.record, this._configurationService);
     if (!link) {
       return null;
     }
@@ -432,16 +433,27 @@ const trimTrailingSlashFromPath = (p: string) => {
   }
 };
 
-const recordToDnslink = (result: IRecord): string | null => {
+const recordToDnslink = (
+  result: IRecord,
+  config: IConfigurationTon,
+): string | null => {
   if (!result) {
     return null;
   } else if (result._tag === "ens-socials-redirect") {
     return null;
   } else if (result._tag === "Record") {
+    if (
+      result.codec === "adnl" &&
+      !config.getConfigTonBackend().getEnabled()
+    ) {
+      return null;
+    }
     const dnsLinkPrefix =
       result.codec === "arweave-ns"
         ? "ar://"
-        : `/${recordNamespaceToUrlHandlerMap[result.codec]}/`;
+        : result.codec === "adnl"
+          ? "adnl://"
+          : `/${recordNamespaceToUrlHandlerMap[result.codec]}/`;
     return `dnslink=${dnsLinkPrefix}${trimTrailingSlashFromPath(
       result.DoHContentIdentifier,
     )}`;

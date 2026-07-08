@@ -850,6 +850,25 @@ describe("Proxy API Integration Tests", function () {
     );
     expect(content_storage_type).to.be.equal("arweave-ns");
   });
+
+  it("should resolve an ADNL (TON Site) contenthash to the adnl gateway subdomain", async () => {
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "tonnet.eth",
+        type: "adnl",
+        contentHash:
+          "adnl://61bd855da6c07e8d1c807e880c2a9a6272011cfc2b34b2e9de32cd37ff6f4ae5",
+        additionalInfo: {},
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "vq33bk5u3ah5di4qb7iqdbktjrheai47qvtjmxj3yzm2n77n5folewn.adnl:8080",
+    );
+    expect(content_path).to.be.equal("/");
+    expect(content_storage_type).to.be.equal("adnl");
+  });
 });
 
 describe("Caddy API Integration Tests", function () {
@@ -1265,6 +1284,26 @@ describe("DoH GET API Integration Tests", function () {
     expect(reply.name).to.equal("vitalik.jsonapi.eth");
     expect(reply.data).to.equal(
       "dnslink=/ipfs/bagaaiaf4af5se33lei5hi4tvmuwce5djnvsseorcge3timzqgy4dknzzeiwceytmn5rwwir2eizdemjtg42denjcfqrgk4tdei5dalbcovzwk4rchj5seylemrzgk43tei5cemdymq4giqjwijddenrzgy2gcrrziq3wkrlehfstam2fguztimjviqztoykbhe3danbveiwce3tbnvsseorcozuxiylmnfvs4zlunarcyitcmfwgc3tdmurduirvgizc4nrsgq2teobcfqrha4tjmnsseorcgiydenzogm4tenzugirh27i",
+    );
+    expect(reply.type).to.equal(16);
+  });
+
+  it("should produce an adnl:// dnslink for a TON (ADNL) contenthash", async () => {
+    const { _result } = await commonSetup({
+      name: "tonnet.eth",
+      type: "adnl",
+      additionalInfo: {},
+      contentHash:
+        "adnl://61bd855da6c07e8d1c807e880c2a9a6272011cfc2b34b2e9de32cd37ff6f4ae5",
+      options: populateDefaultOptions({
+        dohQueryType: "TXT",
+      }),
+    });
+    const result = JSON.parse(_result);
+    const reply = result.Answer[0];
+    expect(reply.name).to.equal("tonnet.eth");
+    expect(reply.data).to.equal(
+      "dnslink=adnl://61bd855da6c07e8d1c807e880c2a9a6272011cfc2b34b2e9de32cd37ff6f4ae5",
     );
     expect(reply.type).to.equal(16);
   });

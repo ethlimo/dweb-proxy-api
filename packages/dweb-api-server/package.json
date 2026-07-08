@@ -16,7 +16,7 @@
   "author": "eth.limo team",
   "license": "MIT",
   "dependencies": {
-    "@ensdomains/content-hash": "^3.0.0-beta.5",
+    "@ensdomains/content-hash": "^3.1.1",
     "@ethlimo/ens-hooks": "0.1.15",
     "@libp2p/peer-id": "^4.0.9",
     "@web3-name-sdk/core": "^0.2.0",

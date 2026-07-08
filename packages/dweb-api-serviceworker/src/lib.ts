@@ -7,6 +7,7 @@ import type {
   IConfigurationIpfs,
   IConfigurationLogger,
   IConfigurationSwarm,
+  IConfigurationTon,
 } from "dweb-api-types/config";
 import { JsonLoggerService } from "dweb-api-logger/jsonlogger";
 import {
@@ -35,6 +36,7 @@ export type ServiceWorkerConfig = IConfigurationLogger &
   IConfigurationIpfs &
   IConfigurationArweave &
   IConfigurationSwarm &
+  IConfigurationTon &
   IConfigurationEnsSocials & {
     verifiedFetch: boolean;
   };
@@ -107,6 +109,10 @@ export const createConfig = (
     }),
     getConfigSwarmBackend: () => ({
       getBackend: () => "https://api.gateway.ethswarm.org",
+    }),
+    getConfigTonBackend: () => ({
+      getBackend: () => "http://adnl:8080",
+      getEnabled: () => true,
     }),
     getConfigEnsSocialsEndpoint: () => ({
       getEnsSocialsEndpoint: null,

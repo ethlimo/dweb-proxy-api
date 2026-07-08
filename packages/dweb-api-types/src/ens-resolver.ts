@@ -6,6 +6,7 @@ export const RECORD_CODEC_TYPE = z.enum([
   "ipns-ns",
   "arweave-ns",
   "swarm",
+  "adnl",
 ]);
 
 /*

@@ -1,6 +1,7 @@
 import { recordNamespaceToUrlHandlerMap } from "./const.js";
 import { ILoggerService } from "dweb-api-types/logger";
 import { arweaveUrlToSandboxSubdomain } from "./arweave.js";
+import { adnlAddressToHostname } from "./adnl.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import { IRecord } from "dweb-api-types/ens-resolver";
 import { ProxyRecord } from "dweb-api-types/dweb-api-resolver";
@@ -9,6 +10,7 @@ import {
   IConfigurationEnsSocials,
   IConfigurationIpfs,
   IConfigurationSwarm,
+  IConfigurationTon,
 } from "dweb-api-types/config";
 
 export const ensureTrailingSlash = (path: string) => {
@@ -102,7 +104,8 @@ export const recordToProxyRecord = async (
   config: IConfigurationEnsSocials &
     IConfigurationIpfs &
     IConfigurationArweave &
-    IConfigurationSwarm,
+    IConfigurationSwarm &
+    IConfigurationTon,
   logger: ILoggerService,
   record: NonNullable<IRecord>,
 ): Promise<
@@ -114,6 +117,7 @@ export const recordToProxyRecord = async (
   const ipfsConfig = config.getConfigIpfsBackend();
   const arweaveConfig = config.getConfigArweaveBackend();
   const swarmConfig = config.getConfigSwarmBackend();
+  const tonConfig = config.getConfigTonBackend();
   var path = "/";
   var overrideCodecHeader: string | undefined = undefined;
   if (record._tag === "ens-socials-redirect") {
@@ -207,6 +211,42 @@ export const recordToProxyRecord = async (
         XContentPath: ensureTrailingSlash(
           "/bzz/" + record.DoHContentIdentifier,
         ),
+      };
+    } else if (record.codec === "adnl") {
+      if (!tonConfig.getEnabled()) {
+        logger.debug("ADNL resolution is disabled", {
+          ...request,
+          origin: "recordToProxyRecord",
+          context: {
+            record,
+          },
+        });
+        return {
+          _tag: "ProxyRecordUnableToRedirect",
+          record: record,
+        };
+      }
+      const hostname = adnlAddressToHostname(record.DoHContentIdentifier);
+      if (hostname === null) {
+        logger.error("ADNL address can not be encoded as a DNS fragment", {
+          ...request,
+          origin: "recordToProxyRecord",
+          context: {
+            record,
+          },
+        });
+        throw new Error("ADNL address can not be encoded as a DNS fragment");
+      }
+      const backendString = tonConfig.getBackend();
+      const url = new URL(backendString);
+      url.hostname = `${hostname}.${url.hostname}`;
+      const explicitPort =
+        extractExplicitPort(backendString) ||
+        (url.protocol === "https:" ? "443" : "80");
+      return {
+        ...record,
+        XContentLocation: constructUrlWithPort(url, explicitPort),
+        XContentPath: "/",
       };
     }
     //record.codec should be never due to exhaustivity check

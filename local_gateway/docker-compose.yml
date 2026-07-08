@@ -18,6 +18,7 @@ services:
       - IPFS_GATEWAY_HOST=rainbow:8090
       - ARWEAVE_GATEWAY_HOST=wayfinder:3000
       - SWARM_GATEWAY_HOST=bee:1633
+      - TON_GATEWAY_HOST=${TON_GATEWAY_HOST:-tonutils-proxy:8080}
     volumes:
       - ./caddy:/etc/caddy:ro
       - ./data:/data:Z777
@@ -77,6 +78,10 @@ services:
       - ARWEAVE_TARGET=http://wayfinder:3000
       # Swarm gateway target URL
       - SWARM_TARGET=http://bee:1633
+      # TON gateway target URL
+      - TON_TARGET=${TON_TARGET:-http://adnl:8080}
+      # Enable TON Site (ADNL) contenthash resolution
+      - TON_ENABLED=${TON_ENABLED:-true}
       # How long to keep domain resolution results cached (in seconds)
       - CACHE_TTL=${CACHE_TTL:-300}
       # HTTPS ingress certificate issuance check (not required for local environments)
@@ -305,6 +310,23 @@ services:
   #  cpu_percent: 5      
   #  mem_limit: 256m      
   #  restart: unless-stopped
+
+  # TON Sites gateway (RLDP-HTTP TON proxy). Must accept host:port Host values.
+  #tonutils-proxy:
+  #  image: <your-tonutils-proxy-image>
+  #  command: ["--addr", "0.0.0.0:8080", "--no-http"]
+  #  networks:
+  #    gateway:
+  #      ipv4_address: 172.20.0.60
+  #  cap_drop:
+  #    - ALL
+  #  read_only: true
+  #  restart: unless-stopped
+  #  expose:
+  #    - "8080"
+  #  dns:
+  #    - 172.20.0.57
+  #  dns_search: []
 
   # Wildcard DNS for subdomain resolution within the network namespace
   wildcard-dns:
