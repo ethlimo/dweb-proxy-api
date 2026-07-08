@@ -40,3 +40,4 @@ EXPOSE 8080 9090 11000 12500
 ENV NODE_OPTIONS="--import=extensionless/register --use-openssl-ca"
 
 CMD ["packages/dweb-api-server/dist/index.js"]
+
