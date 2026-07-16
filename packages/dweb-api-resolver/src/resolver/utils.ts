@@ -240,8 +240,6 @@ export const recordToProxyRecord = async (
       const backendString = tonConfig.getBackend();
       const url = new URL(backendString);
       url.hostname = `${hostname}.${url.hostname}`;
-      // Like the other backends, only include a port when TON_TARGET carries
-      // one explicitly; downstream proxies append their own default port
       const explicitPort = extractExplicitPort(backendString);
       return {
         ...record,
