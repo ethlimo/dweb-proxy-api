@@ -79,6 +79,10 @@
             "types": "./dist/nameservice/Web3NameSdkService.d.ts",
             "default": "./dist/nameservice/Web3NameSdkService.js"
         },
+        "./nameservice/BasenamesService": {
+            "types": "./dist/nameservice/BasenamesService.d.ts",
+            "default": "./dist/nameservice/BasenamesService.js"
+        },
         "./nameservice/utils": {
             "types": "./dist/nameservice/utils.d.ts",
             "default": "./dist/nameservice/utils.js"
