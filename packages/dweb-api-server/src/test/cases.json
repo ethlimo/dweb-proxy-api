@@ -82,5 +82,17 @@
     "type": "none",
     "contentHash": null,
     "additionalInfo": {}
+  },
+  {
+    "name": "example.base.eth",
+    "type": "ipfs",
+    "contentHash": "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    "additionalInfo": {}
+  },
+  {
+    "name": "norecord.base.eth",
+    "type": "none",
+    "contentHash": null,
+    "additionalInfo": {}
   }
 ]

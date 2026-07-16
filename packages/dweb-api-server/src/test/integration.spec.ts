@@ -38,6 +38,7 @@ type HarnessType = {
   hostnameSubstitionService: IHostnameSubstitutionService;
   testEnsService: TestResolverService;
   web3NameSdkService: TestResolverService;
+  testBasenamesService: TestResolverService;
   testArweaveResolverService: TestResolverService;
   testDomainQuerySuperagentService: TestDomainQuerySuperagentService;
   domainQueryService: IDomainQueryService;
@@ -66,6 +67,9 @@ let buildAppContainer = async (): Promise<HarnessType> => {
       EnvironmentConfiguration.Development,
     )) as TestResolverService,
     web3NameSdkService: (await services.web3NameSdk.getBinding(
+      EnvironmentConfiguration.Development,
+    )) as TestResolverService,
+    testBasenamesService: (await services.basenamesService.getBinding(
       EnvironmentConfiguration.Development,
     )) as TestResolverService,
     testArweaveResolverService: (await services.arweaveResolver.getBinding(
@@ -223,11 +227,17 @@ const harness =
     const resolvers = [
       harnessInput.testEnsService,
       harnessInput.web3NameSdkService,
+      harnessInput.testBasenamesService,
     ];
 
     var theRealTestResolverService: TestResolverService;
 
-    if (nameResolvedToEnsName.endsWith("eth")) {
+    if (
+      nameResolvedToEnsName.endsWith(".base.eth") &&
+      harnessInput.configurationService.getConfigBaseBackend().getEnabled()
+    ) {
+      theRealTestResolverService = harnessInput.testBasenamesService;
+    } else if (nameResolvedToEnsName.endsWith("eth")) {
       theRealTestResolverService = harnessInput.testEnsService;
     } else if (nameResolvedToEnsName.endsWith("gno")) {
       theRealTestResolverService = harnessInput.web3NameSdkService;
@@ -868,6 +878,47 @@ describe("Proxy API Integration Tests", function () {
     );
     expect(content_path).to.be.equal("/");
     expect(content_storage_type).to.be.equal("adnl");
+  });
+
+  it("should resolve a Basename (*.base.eth) via the Basenames service", async () => {
+    const { content_location, content_storage_type, res } = await commonSetup({
+      name: "example.base.eth",
+      type: "ipfs",
+      contentHash:
+        "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+      additionalInfo: {},
+      options: populateDefaultOptions({}),
+    });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.contain(
+      "bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    );
+    expect(content_storage_type).to.be.equal("ipfs-ns");
+  });
+
+  it("should fall back to L1 ENS resolution for *.base.eth when BASE_L2_BYPASS_ENABLED is false", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.base.l2BypassEnabled = false;
+    });
+
+    //with the bypass disabled, the harness expects EnsService to serve this
+    //name; the Basenames test resolver is left poisoned (unset), so a 200
+    //here proves the factory routed around it
+    const { content_location, content_storage_type, res } = await commonSetup({
+      name: "example.base.eth",
+      type: "ipfs",
+      contentHash:
+        "ipfs://bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+      additionalInfo: {},
+      options: populateDefaultOptions({}),
+    });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.contain(
+      "bafkreibyh6otmd37y7edohwbjwydmqpxxygarmrur7j4xwhjejnskw3kta",
+    );
+    expect(content_storage_type).to.be.equal("ipfs-ns");
   });
 });
 

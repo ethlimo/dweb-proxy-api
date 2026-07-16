@@ -24,10 +24,7 @@ import {
 } from "./BindingsManager.js";
 import type { ILoggerService } from "dweb-api-types/logger";
 import type { IRedisClient } from "dweb-api-types/redis";
-import type {
-  ICacheService,
-  INamedMemoryCache,
-} from "dweb-api-types/cache";
+import type { ICacheService, INamedMemoryCache } from "dweb-api-types/cache";
 import type { IKuboApiService } from "dweb-api-types/kubo-api";
 import type {
   IDataUrlResolverService,
@@ -50,6 +47,7 @@ import { TestLoggerService, LoggerService } from "dweb-api-logger";
 import { NameServiceFactory } from "dweb-api-resolver/nameservice";
 import { Web3NameSdkService } from "dweb-api-resolver/nameservice/Web3NameSdkService";
 import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
+import { BasenamesService } from "dweb-api-resolver/nameservice/BasenamesService";
 
 export const createApplicationConfigurationBindingsManager = async () => {
   const configuration = new EnvironmentBinding<ServerConfiguration>({
@@ -196,6 +194,16 @@ export const createApplicationConfigurationBindingsManager = async () => {
       new TestResolverService(),
   });
 
+  const basenamesService = new EnvironmentBinding<INameService>({
+    [EnvironmentConfiguration.Production]: async (env) =>
+      new BasenamesService(
+        await configuration.getBinding(env),
+        await logger.getBinding(env),
+      ),
+    [EnvironmentConfiguration.Development]: async () =>
+      new TestResolverService(),
+  });
+
   const domainRateLimit = new EnvironmentBinding<IDomainRateLimitService>({
     [EnvironmentConfiguration.Production]: async (env) =>
       new DomainRateLimitService(
@@ -222,12 +230,16 @@ export const createApplicationConfigurationBindingsManager = async () => {
         await logger.getBinding(env),
         await ensService.getBinding(env),
         await web3NameSdk.getBinding(env),
+        await basenamesService.getBinding(env),
+        await configuration.getBinding(env),
       ),
     [EnvironmentConfiguration.Development]: async (env) =>
       new NameServiceFactory(
         await logger.getBinding(env),
         await ensService.getBinding(env),
         await web3NameSdk.getBinding(env),
+        await basenamesService.getBinding(env),
+        await configuration.getBinding(env),
       ),
   });
 
@@ -287,6 +299,7 @@ export const createApplicationConfigurationBindingsManager = async () => {
     kuboApi,
     web3NameSdk,
     ensService,
+    basenamesService,
     domainRateLimit,
     arweaveResolver,
     nameServiceFactory,
