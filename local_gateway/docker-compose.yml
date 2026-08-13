@@ -70,6 +70,10 @@ services:
       - ETH_RPC_ENDPOINT=${ETH_RPC_ENDPOINT:-https://ethereum.publicnode.com}
       # Chain ID if not using mainnet
       - ETH_CHAIN_ID=${ETH_CHAIN_ID:-1}
+      # Direct resolution for *.base.eth domains
+      - BASE_L2_BYPASS_ENABLED=true
+      # Base L2 RPC endpoint
+      - BASE_RPC_ENDPOINT=https://mainnet.base.org
       # Enable IPFS subdomain support, i.e. bafy.ipfs.rainbow:8090
       - IPFS_SUBDOMAIN_SUPPORT=true
       # IPFS gateway target URL
