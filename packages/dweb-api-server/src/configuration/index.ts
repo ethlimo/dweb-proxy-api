@@ -6,6 +6,7 @@ import type {
   IConfigurationEthereum,
   IConfigurationEthereumFailover,
   IConfigurationGnosis,
+  IConfigurationBase,
   ICacheConfig,
   IConfigurationIpfs,
   IConfigurationServerAsk,
@@ -54,6 +55,13 @@ const configuration = {
   },
   gnosis: {
     rpc: process.env.GNO_RPC_ENDPOINT || "https://rpc.gnosischain.com",
+  },
+  base: {
+    rpc: process.env.BASE_RPC_ENDPOINT || "https://mainnet.base.org",
+    //queries the Basenames registry on Base directly instead of L1 CCIP-read,
+    //working around the Coinbase gateway not serving contenthash records
+    l2BypassEnabled:
+      process.env.BASE_L2_BYPASS_ENABLED === "false" ? false : true,
   },
   // Storage backends
   ipfs: {
@@ -195,6 +203,8 @@ export class TestConfigurationService implements ServerConfiguration {
     this.configuration.arweave.backend = "https://arweave"; //arweave is never actually queried
     this.configuration.ton.backend = "http://adnl:8080"; //ton is never actually queried
     this.configuration.ton.enabled = true;
+    this.configuration.base.rpc = "http://base:69420"; //base is shimmed via TestResolverService
+    this.configuration.base.l2BypassEnabled = true;
     this.configuration.ens.socialsEndpoint = (ens: string) => {
       return `https://socials.com?name=${ens}`;
     };
@@ -248,6 +258,10 @@ export class TestConfigurationService implements ServerConfiguration {
 
   getConfigGnosisBackend = () => {
     return this.getServerConfiguration().getConfigGnosisBackend();
+  };
+
+  getConfigBaseBackend = () => {
+    return this.getServerConfiguration().getConfigBaseBackend();
   };
 
   getCacheConfig = () => {
@@ -430,6 +444,22 @@ export const configurationToIConfigurationGnosis = (config: {
     getConfigGnosisBackend: () => {
       return {
         getBackend: () => config.gnosis.rpc,
+      };
+    },
+  };
+};
+
+export const configurationToIConfigurationBase = (config: {
+  base: {
+    rpc: string;
+    l2BypassEnabled: boolean;
+  };
+}): IConfigurationBase => {
+  return {
+    getConfigBaseBackend: () => {
+      return {
+        getBackend: () => config.base.rpc,
+        getEnabled: () => config.base.l2BypassEnabled,
       };
     },
   };
@@ -695,6 +725,7 @@ export type ServerConfiguration = IConfigurationServerRouter &
   IConfigurationEthereum &
   IConfigurationEthereumFailover &
   IConfigurationGnosis &
+  IConfigurationBase &
   ICacheConfig &
   IConfigurationServerDnsquery &
   IDomainQueryConfig &
@@ -718,6 +749,7 @@ export const configurationToServerConfiguration = (
     ...configurationToIConfigurationEthereum(config),
     ...configurationToIConfigurationEthereumFailover(config),
     ...configurationToIConfigurationGnosis(config),
+    ...configurationToIConfigurationBase(config),
     ...configurationToICacheConfig(config),
     ...configurationToIDomainQueryConfig(config),
     ...configurationToIRedisConfig(config),

@@ -53,6 +53,13 @@ export interface IConfigurationGnosis {
   };
 }
 
+export interface IConfigurationBase {
+  getConfigBaseBackend: () => {
+    getBackend: () => string;
+    getEnabled: () => boolean;
+  };
+}
+
 export type IConfigurationLogger = {
   getLoggerConfig: () => {
     getLevel: () => "warn" | "error" | "info" | "debug";
