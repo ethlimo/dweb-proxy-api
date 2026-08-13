@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Builder
-FROM docker.io/library/node:24-bookworm-slim@sha256:03eae3ef7e88a9de535496fb488d67e02b9d96a063a8967bae657744ecd513f2 AS build
+FROM docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS build
 
 WORKDIR /build
 
@@ -19,7 +19,7 @@ RUN apt-get update && \
 
 RUN ./bin/build.sh
 
-FROM gcr.io/distroless/nodejs24-debian13@sha256:482fabdb0f0353417ab878532bb3bf45df925e3741c285a68038fb138b714cba AS runtime
+FROM gcr.io/distroless/nodejs24-debian13@sha256:2e3b3a96d1d7286c3e4727f9c84b4dc32b6b33e7d7d4425c5a5c8186ad85fa93 AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/ethlimo/dweb-proxy-api"
 
