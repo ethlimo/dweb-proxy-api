@@ -240,9 +240,7 @@ export const recordToProxyRecord = async (
       const backendString = tonConfig.getBackend();
       const url = new URL(backendString);
       url.hostname = `${hostname}.${url.hostname}`;
-      const explicitPort =
-        extractExplicitPort(backendString) ||
-        (url.protocol === "https:" ? "443" : "80");
+      const explicitPort = extractExplicitPort(backendString);
       return {
         ...record,
         XContentLocation: constructUrlWithPort(url, explicitPort),

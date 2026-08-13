@@ -869,6 +869,50 @@ describe("Proxy API Integration Tests", function () {
     expect(content_path).to.be.equal("/");
     expect(content_storage_type).to.be.equal("adnl");
   });
+
+  it("should not append a port for an ADNL contenthash when TON_TARGET has no explicit port", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ton.backend = "https://adnl.website";
+    });
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "tonnet.eth",
+        type: "adnl",
+        contentHash:
+          "adnl://61bd855da6c07e8d1c807e880c2a9a6272011cfc2b34b2e9de32cd37ff6f4ae5",
+        additionalInfo: {},
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "vq33bk5u3ah5di4qb7iqdbktjrheai47qvtjmxj3yzm2n77n5folewn.adnl.website",
+    );
+    expect(content_path).to.be.equal("/");
+    expect(content_storage_type).to.be.equal("adnl");
+  });
+
+  it("should preserve an explicit port for an ADNL contenthash when TON_TARGET has one", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ton.backend = "https://adnl.website:443";
+    });
+    const { content_location, content_path, content_storage_type, res } =
+      await commonSetup({
+        name: "tonnet.eth",
+        type: "adnl",
+        contentHash:
+          "adnl://61bd855da6c07e8d1c807e880c2a9a6272011cfc2b34b2e9de32cd37ff6f4ae5",
+        additionalInfo: {},
+        options: populateDefaultOptions({}),
+      });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(
+      "vq33bk5u3ah5di4qb7iqdbktjrheai47qvtjmxj3yzm2n77n5folewn.adnl.website:443",
+    );
+    expect(content_path).to.be.equal("/");
+    expect(content_storage_type).to.be.equal("adnl");
+  });
 });
 
 describe("Caddy API Integration Tests", function () {
