@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
       - name: Set up Node.js 22.x
         # actions/setup-node@v5
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444       
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020       
         with:
           node-version: '22' 
       - name: Setup safe-chain
