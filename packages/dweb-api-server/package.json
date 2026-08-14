@@ -27,7 +27,7 @@
     "dweb-api-resolver": "file:../dweb-api-resolver",
     "ethers": "^6.13.1",
     "express": "5.2.1",
-    "extensionless": "^1.9.6",
+    "extensionless": "^2.0.6",
     "ioredis": "^5.6.1",
     "multiformats": "^13.0.0",
     "node-cache": "^5.1.2",
