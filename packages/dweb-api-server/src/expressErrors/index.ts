@@ -1,4 +1,28 @@
-import type { Response } from "express";
+import type { NextFunction, Request, Response } from "express";
+import type { ILoggerService } from "dweb-api-types/logger";
+import { getTraceIdFromRequest } from "../utils/index.js";
+
+// Last middleware on every express app. Without it errors end up in the
+// express default handler, which sends the stack trace (with file paths)
+// to the client unless NODE_ENV is "production".
+export function errorHandler(logger: ILoggerService, origin: string) {
+  // express only treats middleware with 4 arguments as an error handler
+  return (err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    logger.error("unhandled error in request handler", {
+      trace_id: getTraceIdFromRequest(req),
+      origin,
+      context: {
+        error: err,
+        path: req.path,
+      },
+    });
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    errorBuilder(res, 500);
+  };
+}
 
 export function noContentHashSet(res: Response) {
   res.writeHead(404, {
