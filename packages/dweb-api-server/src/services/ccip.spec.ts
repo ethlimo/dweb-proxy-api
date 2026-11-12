@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import { FetchRequest, JsonRpcProvider } from "ethers";
 import {
   createCcipGetUrl,
+  defaultCcipFetchOptions,
   isAllowedCcipUrl,
   isPublicAddress,
   publicOnlyLookup,
@@ -234,21 +235,32 @@ describe("CCIP-read url restrictions", () => {
     expect(isPublicAddress("2606:4700:4700::1111")).to.equal(true);
   });
 
-  it("only allows https urls pointing at public addresses", async () => {
-    expect(await isAllowedCcipUrl("https://1.1.1.1/{sender}/{data}")).to.equal(
-      true,
-    );
+  it("only allows https urls pointing at public addresses", () => {
+    expect(isAllowedCcipUrl("https://1.1.1.1/{sender}/{data}")).to.equal(true);
     for (const url of [
       "http://1.1.1.1/{sender}/{data}",
       "https://127.0.0.1/{sender}/{data}",
       "https://[::1]/x",
-      "https://localhost/x",
       "https://169.254.169.254/x",
       "file:///etc/passwd",
       "not a url",
     ]) {
-      expect(await isAllowedCcipUrl(url), url).to.equal(false);
+      expect(isAllowedCcipUrl(url), url).to.equal(false);
     }
+  });
+
+  it("leaves hostnames to the check at connect time", async () => {
+    // no DNS lookup up front, the name is only resolved when connecting
+    expect(isAllowedCcipUrl("https://localhost/x")).to.equal(true);
+    let caught: any = null;
+    try {
+      await createCcipGetUrl(defaultCcipFetchOptions)(
+        new FetchRequest("https://localhost/x"),
+      );
+    } catch (e) {
+      caught = e;
+    }
+    expect(String(caught?.message)).to.contain("not public");
   });
 });
 

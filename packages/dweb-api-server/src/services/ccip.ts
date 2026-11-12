@@ -1,5 +1,4 @@
 import dns from "node:dns";
-import { lookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
@@ -74,12 +73,15 @@ export function isPublicAddress(address: string): boolean {
   return false;
 }
 
-// Early check so we don't even try urls that can't work. The check that
-// matters for DNS is the one in publicOnlyLookup at connect time.
-export async function isAllowedCcipUrl(
+// Early check so we don't even try urls that can't work: the scheme and
+// ip literals. Hostnames are only checked in publicOnlyLookup when the
+// socket connects. Resolving them here as well would mean a second DNS
+// lookup for every url, and one that isn't covered by the request
+// deadline.
+export function isAllowedCcipUrl(
   url: string,
   options: Pick<CcipFetchOptions, "isAllowedAddress" | "allowHttp"> = {},
-): Promise<boolean> {
+): boolean {
   const isAllowedAddress = options.isAllowedAddress ?? isPublicAddress;
   let parsed: URL;
   try {
@@ -94,18 +96,7 @@ export async function isAllowedCcipUrl(
     return false;
   }
   const host = parsed.hostname.replace(/^\[(.*)\]$/, "$1");
-  if (isIP(host)) {
-    return isAllowedAddress(host);
-  }
-  try {
-    const addresses = await lookup(host, { all: true, verbatim: true });
-    return (
-      addresses.length > 0 &&
-      addresses.every((a) => isAllowedAddress(a.address))
-    );
-  } catch {
-    return false;
-  }
+  return !isIP(host) || isAllowedAddress(host);
 }
 
 type DnsLookupAll = (
@@ -116,10 +107,10 @@ type DnsLookupAll = (
 const defaultLookupAll: DnsLookupAll = (hostname, callback) =>
   dns.lookup(hostname, { all: true, verbatim: true }, callback);
 
-// The check in isAllowedCcipUrl happens before the request, so a hostname
-// could resolve to a public address there and to a private one when we
-// connect (DNS rebinding). This lookup is what the socket actually uses,
-// so the address we connect to is the one that gets checked.
+// Checking a hostname before the request isn't enough, it could resolve
+// to a public address then and to a private one when we connect (DNS
+// rebinding). This lookup is what the socket actually uses, so the
+// address we connect to is the one that gets checked.
 export function publicOnlyLookup(
   lookupAll: DnsLookupAll = defaultLookupAll,
   isAllowedAddress: (address: string) => boolean = isPublicAddress,
@@ -337,7 +328,7 @@ export function restrictCcipRead(
     const errorMessages: string[] = [];
 
     for (const url of urls) {
-      if (!(await isAllowedCcipUrl(url, options))) {
+      if (!isAllowedCcipUrl(url, options)) {
         logger.info("ignoring CCIP-read url that is not public https", {
           trace_id: "UNDEFINED_TRACE_ID",
           origin: "restrictCcipRead",
