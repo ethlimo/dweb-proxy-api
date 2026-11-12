@@ -1,6 +1,5 @@
 import { Contract, JsonRpcProvider, ZeroAddress, namehash } from "ethers";
 import { ILoggerService } from "dweb-api-types/logger";
-import { restrictCcipRead } from "./ccip.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
   DecodedCodecString,
@@ -41,7 +40,6 @@ export class BasenamesService implements INameService {
     this.provider = new JsonRpcProvider(rpc, undefined, {
       staticNetwork: true,
     });
-    restrictCcipRead(this.provider, logger);
     this.registry = new Contract(
       BASENAMES_REGISTRY_ADDRESS,
       REGISTRY_ABI,

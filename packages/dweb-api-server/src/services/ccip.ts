@@ -8,6 +8,7 @@ import {
   assert,
   makeError,
   type AbstractProvider,
+  type FallbackProvider,
   type FetchGetUrlFunc,
   type GetUrlResponse,
 } from "ethers";
@@ -17,6 +18,11 @@ import type { ILoggerService } from "dweb-api-types/logger";
 // anyone who controls a resolver decides where this server sends requests.
 // Only allow https urls that point at public addresses, otherwise a
 // resolver could make us call services on our own network.
+//
+// This lives in the server package on purpose: dweb-api-resolver is also
+// bundled into the service worker, which runs in the browser and can't use
+// node:dns / node:https. The server applies it to the providers after
+// creating the name services (see dependencies/services.ts).
 
 const blocked = new BlockList();
 for (const [net, prefix] of [
@@ -360,5 +366,19 @@ export function restrictCcipRead(
       },
     );
   };
+  return provider;
+}
+
+// The fallback provider and the providers behind it can each end up doing
+// the CCIP-read request, so restrict all of them.
+export function restrictFallbackProviderCcipRead(
+  provider: FallbackProvider,
+  logger: ILoggerService,
+  options: CcipFetchOptions = defaultCcipFetchOptions,
+) {
+  restrictCcipRead(provider, logger, options);
+  for (const config of provider.providerConfigs) {
+    restrictCcipRead(config.provider, logger, options);
+  }
   return provider;
 }

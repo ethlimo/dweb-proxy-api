@@ -9,8 +9,9 @@ import {
   isPublicAddress,
   publicOnlyLookup,
   restrictCcipRead,
-} from "../../src/nameservice/ccip.js";
-import { EnsService } from "../../src/nameservice/EnsService.js";
+  restrictFallbackProviderCcipRead,
+} from "./ccip.js";
+import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
 
 const noop = () => {};
 const logger = { debug: noop, info: noop, warn: noop, error: noop } as any;
@@ -229,6 +230,8 @@ describe("EnsService CCIP-read", () => {
       }),
     };
     const ens = new EnsService(config, {} as any, logger);
+    // same as dependencies/services.ts does for the production binding
+    restrictFallbackProviderCcipRead(ens.provider, logger);
     const tx = { to: "0x0000000000000000000000000000000000000001" };
 
     hits = 0;
