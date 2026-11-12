@@ -9,6 +9,7 @@ import {
   makeError,
   type AbstractProvider,
   type FallbackProvider,
+  type FetchCancelSignal,
   type FetchGetUrlFunc,
   type GetUrlResponse,
 } from "ethers";
@@ -167,6 +168,9 @@ export type CcipFetchOptions = {
   allowHttp?: boolean;
 };
 
+// a gateway that needs more hops than this is broken anyway
+const MAX_CCIP_REDIRECTS = 5;
+
 export const defaultCcipFetchOptions: CcipFetchOptions = {
   timeoutMs: 10_000,
   maxResponseBytes: 1024 * 1024,
@@ -177,14 +181,25 @@ export const defaultCcipFetchOptions: CcipFetchOptions = {
 // time, enforces a total deadline (the default only has a socket idle
 // timeout, so a gateway sending a byte every few seconds never times out)
 // and caps the response size.
+//
+// Redirects are followed here as well. If we returned a 301/302 to ethers
+// it would follow it itself, but the request it creates for the new
+// location uses the default getUrl, so a gateway could redirect us to an
+// internal https host and skip every check above.
 export function createCcipGetUrl(options: CcipFetchOptions): FetchGetUrlFunc {
   const isAllowedAddress = options.isAllowedAddress ?? isPublicAddress;
   const lookupFn = publicOnlyLookup(options.lookupAll, isAllowedAddress);
-  return (req, signal) =>
+
+  const fetchOnce = (
+    req: FetchRequest,
+    href: string,
+    expires: number,
+    signal?: FetchCancelSignal,
+  ) =>
     new Promise<GetUrlResponse>((resolve, reject) => {
       let url: URL;
       try {
-        url = new URL(req.url);
+        url = new URL(href);
       } catch (e) {
         reject(e);
         return;
@@ -223,7 +238,7 @@ export function createCcipGetUrl(options: CcipFetchOptions): FetchGetUrlFunc {
       };
       const deadline = setTimeout(
         () => fail(makeError("CCIP gateway request timeout", "TIMEOUT")),
-        Math.min(req.timeout, options.timeoutMs),
+        Math.max(expires - Date.now(), 0),
       );
       signal?.addListener(() =>
         fail(makeError("request cancelled", "CANCELLED")),
@@ -276,6 +291,32 @@ export function createCcipGetUrl(options: CcipFetchOptions): FetchGetUrlFunc {
       }
       request.end();
     });
+
+  return async (req, signal) => {
+    // one deadline for the request and all its redirects
+    const expires = Date.now() + Math.min(req.timeout, options.timeoutMs);
+    let href = req.url;
+    for (let redirects = 0; ; redirects++) {
+      const resp = await fetchOnce(req, href, expires, signal);
+      const location = resp.headers["location"];
+      // Same cases ethers follows. Anything else, including a redirect
+      // for a POST, goes back to ethers, which doesn't follow those.
+      if (
+        (resp.statusCode !== 301 && resp.statusCode !== 302) ||
+        req.method !== "GET" ||
+        !location
+      ) {
+        return resp;
+      }
+      if (redirects >= MAX_CCIP_REDIRECTS) {
+        throw makeError(
+          "too many CCIP gateway redirects",
+          "UNSUPPORTED_OPERATION",
+        );
+      }
+      href = new URL(location, href).href;
+    }
+  };
 }
 
 // Replaces provider.ccipReadFetch with the same logic as ethers (EIP-3668:

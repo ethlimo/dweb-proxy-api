@@ -111,6 +111,57 @@ describe("CCIP-read gateway requests", () => {
     expect(String(caught?.message)).to.contain("not public");
   });
 
+  it("checks the address of redirect targets too", async () => {
+    let internalHits = 0;
+    const internal = await gateway((_req, res) => {
+      internalHits++;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end('{"data":"0x1234"}');
+    });
+    const redirecting = await gateway((_req, res) => {
+      res.writeHead(302, { location: `${internal.url}/secret` });
+      res.end();
+    });
+    // both servers are on 127.0.0.1, so allow the first address that gets
+    // checked (the gateway) and refuse everything after it
+    let checks = 0;
+    try {
+      const { response, error } = await fetchWith(`${redirecting.url}/x`, {
+        ...testOptions(),
+        isAllowedAddress: () => checks++ === 0,
+      });
+      expect(response).to.equal(null);
+      expect(String(error?.message)).to.contain("not public");
+      expect(internalHits).to.equal(0);
+    } finally {
+      internal.close();
+      redirecting.close();
+    }
+  });
+
+  it("still follows redirects between allowed gateways", async () => {
+    const target = await gateway((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end('{"data":"0x1234"}');
+    });
+    const redirecting = await gateway((_req, res) => {
+      res.writeHead(301, { location: `${target.url}/moved` });
+      res.end();
+    });
+    try {
+      const { response, error } = await fetchWith(
+        `${redirecting.url}/x`,
+        testOptions(),
+      );
+      expect(error).to.equal(null);
+      expect(response?.statusCode).to.equal(200);
+      expect(response?.bodyJson.data).to.equal("0x1234");
+    } finally {
+      target.close();
+      redirecting.close();
+    }
+  });
+
   it("stops a gateway that keeps the response open", async () => {
     const drip = await dripGateway();
     try {
