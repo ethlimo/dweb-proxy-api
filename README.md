@@ -25,6 +25,7 @@ __Gateway request flow__
 | `IPFS_AUTH_KEY`     | `null` | Basic authentication for `IPFS_KUBO_API_URL`. |
 | `IPFS_KUBO_API_URL` | `undefined` | URL to Kubo `/api/v0/name/resolve` service. This setting performs IPNS name resolution and PeerId conversion to CIDv1 identifiers during the contentHash lookup process. Note, this does not enable or disable IPNS support (as this is performed by the IPFS backend) but rather attempts to use resolved CID values as cache keys as opposed to peerIds. Please read the official IPFS [documentation](https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-name-resolve) for more information. |
 | `ARWEAVE_TARGET`     | `"https://arweave.net"` | Arweave gateway FQDN. |
+| `ARWEAVE_ANT_SOURCE_WHITELIST` | (unset) | Comma separated contract source tx ids of ANT contracts whose records may be read through warp. Empty disables ANT record lookups and `arweave://` ids are used as they are. See [Security notes](#security-notes) before setting this. |
 | `SWARM_TARGET`     | `"https://api.gateway.ethswarm.org"` | Swarm gateway FQDN. |
 | `TON_TARGET`     | `"http://adnl:8080"` | TON gateway root FQDN. Returned in subdomain format, i.e. `${adnlBase32}.adnl:8080`, so `*.adnl` must resolve to an RLDP-HTTP TON proxy. |
 | `TON_ENABLED`     | `"false"` | Enables TON Site (ADNL) contenthash resolution. |
@@ -59,6 +60,18 @@ __Gateway request flow__
 | `DATAURL_ENABLED` | `"false"` | Enable [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) with [ENSIP-TBD](https://github.com/nxt3d/ENSIP-ideas/blob/main/ENSIPS/ensip-TBD-2.md) [hook](https://github.com/ethlimo/ens-hooks) support |
 | `DATAURL_PORT` | `12500` | TCP port to bind on |
 | `DATAURL_ENDPOINT` | (unset) | URL of the [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) hook execution endpoint. Required if `DATAURL_ENABLED=true`. |
+
+## Security notes
+
+Everything a name points to (contenthash, resolver contract, CCIP-read gateway urls, ANT contracts) is chosen by whoever owns the name, so treat it as untrusted input. Some things to keep in mind when running the service:
+
+- **Network access.** The API server makes requests to RPC endpoints, the domains api, Kubo and, for CCIP-read, gateways chosen by resolver contracts. Restricting outgoing traffic of the API host (no access to internal services or cloud metadata endpoints) is the best protection against requests ending up where they shouldn't.
+- **Redis and Kubo.** Neither should be reachable without authentication. Use a password in `REDIS_URL` (`redis://:password@host:6379`) and set `IPFS_AUTH_KEY` if Kubo's RPC API is used. Don't publish their ports.
+- **Listeners.** Only the reverse proxy should be public. The API, DoH, ask and metrics ports are meant for it, not for clients. `local_gateway` publishes ports 80 and 443 on all interfaces, which makes it reachable from the local network.
+- **RPC trust.** With `ETH_PROVIDER_QUORUM=1` the answer of a single RPC endpoint is used as is. Use `2` with independent providers if that matters for your setup.
+- **ANT contracts.** Reading ANT records means evaluating the SmartWeave contract with warp, which runs the contract source in this process without a real sandbox. Only add contract sources you have reviewed to `ARWEAVE_ANT_SOURCE_WHITELIST`.
+- **On-demand certificates.** `/ask` is rate limited per hostname. A name with a wildcard resolver can produce any number of subdomains, each of which can trigger a new certificate. Consider limits per parent name in the ingress or certificate setup.
+- **Production mode.** Run with `NODE_ENV=production`, otherwise express includes stack traces in error responses it handles itself.
 
 ## Quickstart
 
