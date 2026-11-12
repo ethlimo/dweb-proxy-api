@@ -219,7 +219,12 @@ export const createApplicationConfigurationBindingsManager = async () => {
 
   const arweaveResolver = new EnvironmentBinding<IArweaveResolver>({
     [EnvironmentConfiguration.Production]: async (env) =>
-      new ArweaveResolver(await logger.getBinding(env)),
+      new ArweaveResolver(
+        await logger.getBinding(env),
+        (await configuration.getBinding(env))
+          .getConfigArweaveBackend()
+          .getAntSourceWhitelist?.() ?? [],
+      ),
     [EnvironmentConfiguration.Development]: async () =>
       new TestResolverService(),
   });

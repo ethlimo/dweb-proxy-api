@@ -6,17 +6,43 @@ import { IArweaveResolver } from "dweb-api-types/arweave";
 
 LoggerFactory.INST.setOptions({ LogLevel: "none" });
 
+// Reading an ANT's records means evaluating the SmartWeave contract behind
+// the tx id. Without a sandbox plugin warp runs the contract source with
+// `new Function` in this process, and it can still reach `process`,
+// `global` and `fetch`. The tx id comes from the ENS contenthash, so
+// anyone could point a name at their own contract and have it executed
+// here. Contracts are therefore only evaluated when their source tx id is
+// in `antSourceWhitelist` (ARWEAVE_ANT_SOURCE_WHITELIST), and not at all
+// when the list is empty. In that case arweave:// ids are used as is.
 export class ArweaveResolver implements IArweaveResolver {
-  warp = WarpFactory.forMainnet({ inMemory: true, dbLocation: "./warpdb" });
+  _warp: ReturnType<typeof WarpFactory.forMainnet> | null = null;
   _logger: ILoggerService;
+  _antSourceWhitelist: string[];
 
-  constructor(logger: ILoggerService) {
+  constructor(logger: ILoggerService, antSourceWhitelist: string[] = []) {
     this._logger = logger;
+    this._antSourceWhitelist = antSourceWhitelist;
+  }
+
+  get warp() {
+    if (!this._warp) {
+      this._warp = WarpFactory.forMainnet({
+        inMemory: true,
+        dbLocation: "./warpdb",
+      });
+    }
+    return this._warp;
   }
 
   arweaveContractQuery = async (request: IRequestContext, tx_id: string) => {
+    if (this._antSourceWhitelist.length === 0) {
+      return undefined;
+    }
     try {
-      const contract = this.warp.pst(tx_id);
+      const contract = this.warp.pst(tx_id).setEvaluationOptions({
+        // warp checks this before it evaluates any contract source
+        whitelistSources: this._antSourceWhitelist,
+      });
 
       const state = await contract.readState();
       return state;
