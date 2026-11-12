@@ -102,10 +102,12 @@ const ensService = (
     logger,
   );
 
-const call = (ens: EnsService) =>
+// ethers caches identical calls for a short time, pass different data to
+// make sure a request is really sent
+const call = (ens: EnsService, data = "0x") =>
   ens.provider.call({
     to: "0x0000000000000000000000000000000000000001",
-    data: "0x",
+    data,
   });
 
 const callError = async (ens: EnsService) => {
@@ -147,6 +149,21 @@ describe("EnsService RPC timeouts and failover", function () {
     const started = Date.now();
     expect(await call(ens)).to.equal(backupResult);
     expect(Date.now() - started).to.be.lessThan(1500);
+  });
+
+  it("doesn't wait for a hanging primary again on the next request", async function () {
+    const primary = await fakeRpc(5000, "aa");
+    const backup = await fakeRpc(0, "bb");
+    const ens = ensService([primary.url, backup.url], {
+      request: 500,
+      stall: 200,
+    });
+
+    expect(await call(ens)).to.equal(backupResult);
+    const started = Date.now();
+    expect(await call(ens, "0x01")).to.equal(backupResult);
+    expect(Date.now() - started).to.be.lessThan(300);
+    expect(primary.calls()).to.equal(1);
   });
 
   it("uses the failover endpoint when the primary returns an HTTP error", async function () {
