@@ -125,7 +125,7 @@ const configuration = {
   // per client ip limit for the proxy and dns-query endpoints
   client_rate_limit: {
     limit: Number(process.env.CLIENT_RATE_LIMIT ?? 0),
-    period: Number(process.env.CLIENT_RATE_PERIOD ?? 60), // seconds
+    period: parsePositiveInt(process.env.CLIENT_RATE_PERIOD, 60), // seconds
     trust_proxy: process.env.TRUST_PROXY ?? "",
   },
   //dns-query isolated endpoint (DOH)

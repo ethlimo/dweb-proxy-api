@@ -3,7 +3,11 @@ import { expect } from "chai";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import express from "express";
-import { applyTrustProxy, clientRateLimit } from "./clientRateLimit.js";
+import {
+  applyTrustProxy,
+  clientKey,
+  clientRateLimit,
+} from "./clientRateLimit.js";
 
 const noop = () => {};
 const logger = { debug: noop, info: noop, warn: noop, error: noop } as any;
@@ -122,5 +126,36 @@ describe("clientRateLimit", function () {
 
     expect(await get(port)).to.equal(200);
     expect(await get(port)).to.equal(200);
+  });
+
+  it("counts IPv6 clients per /64", async function () {
+    const service = memoryRateLimit();
+    const app = express();
+    applyTrustProxy(app, "loopback");
+    app.use(clientRateLimit(config(1), service as any, logger));
+    const port = await start(app);
+
+    const ip = (a: string) => ({ "x-forwarded-for": a });
+    expect(await get(port, ip("2001:db8:1:2::1"))).to.equal(200);
+    expect(await get(port, ip("2001:db8:1:2:ffff::42"))).to.equal(429);
+    expect(await get(port, ip("2001:db8:1:3::1"))).to.equal(200);
+  });
+});
+
+describe("clientKey", function () {
+  it("keeps ipv4 addresses and unwraps ipv4-mapped ones", function () {
+    expect(clientKey("1.2.3.4")).to.equal("1.2.3.4");
+    expect(clientKey("::ffff:1.2.3.4")).to.equal("1.2.3.4");
+  });
+
+  it("reduces ipv6 addresses to their /64", function () {
+    expect(clientKey("2001:db8:1:2::1")).to.equal("2001:db8:1:2::/64");
+    expect(clientKey("2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd")).to.equal(
+      "2001:db8:1:2::/64",
+    );
+    expect(clientKey("2001:db8::1")).to.equal("2001:db8:0:0::/64");
+    expect(clientKey("::1")).to.equal("0:0:0:0::/64");
+    expect(clientKey("fe80::1%eth0")).to.equal("fe80:0:0:0::/64");
+    expect(clientKey("64:ff9b::1.2.3.4")).to.equal("64:ff9b:0:0::/64");
   });
 });
