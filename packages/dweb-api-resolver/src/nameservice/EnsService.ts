@@ -14,6 +14,7 @@ import {
   IConfigurationEthereumFailover,
 } from "dweb-api-types/config";
 import { getContentHashFallback } from "./utils.js";
+import { restrictCcipRead } from "./ccip.js";
 import { Interface } from "ethers";
 import { ICacheService } from "dweb-api-types/cache";
 import { executeHook } from "@ethlimo/ens-hooks";
@@ -156,6 +157,12 @@ export class EnsService implements INameService, IDataUrlResolverService {
         quorum: quorum,
       },
     );
+    // the fallback provider and the ones behind it can each end up doing
+    // the CCIP-read request, so restrict all of them
+    restrictCcipRead(this.provider, logger);
+    for (const { provider } of providers_as_config) {
+      restrictCcipRead(provider, logger);
+    }
     this._logger = logger;
   }
 
