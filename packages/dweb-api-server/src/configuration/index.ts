@@ -140,7 +140,8 @@ const configuration = {
     ttl: 60,
     endpoint: process.env.DOMAINSAPI_ENDPOINT,
     max_hops: 5, //e.g. asdf.limo -> whatever -> whatever.eth
-    timeout_ms: parseInt(process.env.DOMAINSAPI_TIMEOUT_MS || "5000"),
+    // superagent treats 0 or NaN as "no timeout", so fall back to the default
+    timeout_ms: parsePositiveInt(process.env.DOMAINSAPI_TIMEOUT_MS, 5000),
   },
   logging: {
     level: process.env.LOG_LEVEL || "info",
