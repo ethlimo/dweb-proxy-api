@@ -10,7 +10,11 @@ import type {
 } from "dweb-api-types/ens-resolver";
 import type { Request, Response } from "express";
 import type { IDomainQueryService } from "../services/DomainsQueryService/index.js";
-import { getTraceIdFromRequest, hostnameIsENSTLD } from "../utils/index.js";
+import {
+  getTraceIdFromRequest,
+  hostnameIsENSTLD,
+  isDomainNameTooLong,
+} from "../utils/index.js";
 import type { ILoggerService } from "dweb-api-types/logger";
 import type { IRequestContext } from "dweb-api-types/request-context";
 import type {
@@ -280,6 +284,10 @@ export class DnsQuery implements IDnsQuery {
     const type = query.type || "TXT";
 
     if (typeof name !== "string" || typeof type !== "string") {
+      errorBuilder(res, 400);
+      return;
+    }
+    if (isDomainNameTooLong(name)) {
       errorBuilder(res, 400);
       return;
     }
