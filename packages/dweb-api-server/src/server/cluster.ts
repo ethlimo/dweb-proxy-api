@@ -5,6 +5,12 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import type { Server as NodeHttpServer } from "node:http";
 import type { ILoggerService } from "dweb-api-types/logger";
 import { withProcessLogger } from "./clusterLogger.js";
+import {
+  instrumentServer,
+  startClusterMetricsServer,
+  startDefaultMetrics,
+  startLocalMetricsServer,
+} from "./metrics.js";
 
 type StartFn = (
   registerServer: (server: NodeHttpServer) => void,
@@ -22,10 +28,14 @@ type ClusterOptions = {
   keepAliveTimeoutMs?: number;
   catastrophicRestarts?: number;
   catastrophicWindowMs?: number;
+  // port for the prometheus /metrics endpoint, 0 or unset disables it
+  metricsPort?: number;
   logger?: ILoggerService;
 };
 
-type ClusterNumericOptions = Required<Omit<ClusterOptions, "logger">>;
+type ClusterNumericOptions = Required<
+  Omit<ClusterOptions, "logger" | "metricsPort">
+>;
 
 const DEFAULTS: ClusterNumericOptions = {
   workers: Math.max(2, availableParallelism()),
@@ -67,7 +77,7 @@ export function runClustered(
   start: StartFn,
   opts: ClusterOptions = {},
 ): () => void {
-  const { logger, ...numericOpts } = opts;
+  const { logger, metricsPort = 0, ...numericOpts } = opts;
   const raw = { ...DEFAULTS, ...numericOpts };
 
   // Validate and clamp all numeric options. For every option except
@@ -106,6 +116,10 @@ export function runClustered(
   // process, run start() directly in the current process.
   if (!cluster.isPrimary || workerCount <= 1) {
     const cleanups: Array<() => void> = [];
+    if (cluster.isPrimary && metricsPort > 0) {
+      const metricsServer = startLocalMetricsServer(metricsPort);
+      cleanups.push(() => metricsServer.close());
+    }
     void runWorker(start, o, logger, cleanups);
     // runWorker populates `cleanups` asynchronously (after its first await).
     // Callers must flush pending microtasks (e.g. via setImmediate) before
@@ -118,6 +132,9 @@ export function runClustered(
 
   // Primary process: fork `workerCount` workers and supervise them.
   cluster.schedulingPolicy = cluster.SCHED_RR;
+
+  const metricsServer =
+    metricsPort > 0 ? startClusterMetricsServer(metricsPort) : null;
 
   const lastHeartbeat = new Map<number, number>();
   const restartTimestamps: number[] = [];
@@ -207,6 +224,7 @@ export function runClustered(
     // without sending signals to workers or calling process.exit().
     // In production, use shutdownPrimary() (triggered via SIGTERM/SIGINT).
     clearInterval(watchdog);
+    metricsServer?.close();
     cluster.removeListener("exit", onClusterExit);
     process.removeListener("SIGTERM", shutdownPrimary);
     process.removeListener("SIGINT", shutdownPrimary);
@@ -228,8 +246,11 @@ async function runWorker(
   let sockets = 0;
   let overloadedSince = 0;
 
+  startDefaultMetrics();
+
   const registerServer = (server: NodeHttpServer) => {
     servers.add(server);
+    instrumentServer(server);
 
     server.requestTimeout = o.requestTimeoutMs;
     server.headersTimeout = o.headersTimeoutMs;
