@@ -21,6 +21,7 @@ import type {
   ICondfigurationDataUrlEndpoint,
   IConfigurationDataUrlServer,
   IClusterConfig,
+  IClientRateLimitConfig,
 } from "dweb-api-types/config";
 import { parseRawConfig } from "dweb-api-resolver/HostnameSubstitutionService/parseRawConfig";
 export const VALID_ENS_TLDS = ["eth", "gno", "art"];
@@ -120,6 +121,12 @@ const configuration = {
     },
     //this is applied before the suffix transformation
     max_label_limit: Number(process.env.ASK_MAX_LABEL_LIMIT ?? 10),
+  },
+  // per client ip limit for the proxy and dns-query endpoints
+  client_rate_limit: {
+    limit: Number(process.env.CLIENT_RATE_LIMIT ?? 0),
+    period: Number(process.env.CLIENT_RATE_PERIOD ?? 60), // seconds
+    trust_proxy: process.env.TRUST_PROXY ?? "",
   },
   //dns-query isolated endpoint (DOH)
   dnsquery: {
@@ -234,6 +241,10 @@ export class TestConfigurationService implements ServerConfiguration {
 
   getConfigAskEndpoint = () => {
     return this.getServerConfiguration().getConfigAskEndpoint();
+  };
+
+  getClientRateLimitConfig = () => {
+    return this.getServerConfiguration().getClientRateLimitConfig();
   };
 
   getHostnameSubstitutionConfig = () => {
@@ -351,6 +362,22 @@ export const configurationToIAskEndpointConfig = (config: {
         getMaxLabelLimit: () => config.ask.max_label_limit,
       };
     },
+  };
+};
+
+export const configurationToIClientRateLimitConfig = (config: {
+  client_rate_limit: {
+    limit: number;
+    period: number;
+    trust_proxy: string;
+  };
+}): IClientRateLimitConfig => {
+  return {
+    getClientRateLimitConfig: () => ({
+      getLimit: () => config.client_rate_limit.limit,
+      getPeriod: () => config.client_rate_limit.period,
+      getTrustProxy: () => config.client_rate_limit.trust_proxy,
+    }),
   };
 };
 
@@ -734,7 +761,8 @@ export type ServerConfiguration = IConfigurationServerRouter &
   IConfigurationKubo &
   ICondfigurationDataUrlEndpoint &
   IConfigurationDataUrlServer &
-  IClusterConfig;
+  IClusterConfig &
+  IClientRateLimitConfig;
 
 export const configurationToServerConfiguration = (
   config: typeof configuration,
@@ -764,6 +792,7 @@ export const configurationToServerConfiguration = (
     ...configurationToIConfigurationDataUrlEndpoint(config),
     ...configurationToIConfigurationDataUrlServer(config),
     ...configurationToIClusterConfig(config),
+    ...configurationToIClientRateLimitConfig(config),
     _innerConfigurationObject: config,
   };
 };

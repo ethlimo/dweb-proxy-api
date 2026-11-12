@@ -28,6 +28,7 @@ import { IHostnameSubstitutionService } from "dweb-api-resolver/HostnameSubstitu
 import { IDataUrlResolverService } from "dweb-api-types/name-service";
 import { ProxyRecord } from "dweb-api-types/dweb-api-resolver";
 import { type Server as NodeHttpServer } from "http";
+import { applyTrustProxy, clientRateLimit } from "./clientRateLimit.js";
 
 interface ProxyServerErrorNotSupported {
   _type: "ProxyServerNotSupported";
@@ -523,6 +524,19 @@ export class Server extends SharedServer {
     const dnsqueryRouterConfig =
       this._configurationService.getDnsqueryRouterConfig();
     const askRouterConfig = this._configurationService.getAskRouterConfig();
+
+    const trustProxy = this._configurationService
+      .getClientRateLimitConfig()
+      .getTrustProxy();
+    const rateLimit = clientRateLimit(
+      this._configurationService,
+      this._domainRateLimitService,
+      this._logger,
+    );
+    for (const app of [proxyExpress, dnsqueryExpress]) {
+      applyTrustProxy(app, trustProxy);
+      app.use(rateLimit);
+    }
 
     proxyExpress.all("/{*splat}", this.proxyServer.bind(this));
     const proxyServer = proxyExpress.listen(routerConfig.getRouterListenPort());

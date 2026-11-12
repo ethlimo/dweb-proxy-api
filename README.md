@@ -44,6 +44,9 @@ __Gateway request flow__
 | `DOMAIN_TLD_HOSTNAME` | `"eth"` | Subdomain to use with gateway (naming service dependent). For example, `ens.eth.limo`. Contingent upon the setting of `DOMAIN_TLD` for gateway operations. |
 | `DNSQUERY_ENABLED` | `"true"` | Enable DNS over HTTPS (DoH) listener. |
 | `DNSQUERY_LISTEN_PORT` | `"11000"` | Listener port for DoH. |
+| `CLIENT_RATE_LIMIT` | `0` | Requests allowed per client IP and `CLIENT_RATE_PERIOD` on the proxy and DoH listeners, counted in Redis. Over the limit the client gets a `429`. `0` disables it. |
+| `CLIENT_RATE_PERIOD` | `60` | Rate limit window in seconds. |
+| `TRUST_PROXY` | `""` | Express `trust proxy` setting for the proxy and DoH listeners, used to get the client IP from `X-Forwarded-For`. Behind a reverse proxy set it to the proxy address or subnet (e.g. `loopback` or `10.0.0.0/8`), otherwise all clients share the proxy's IP. Leave it empty if the listeners are reachable directly, since clients can set `X-Forwarded-For` themselves. |
 | `PURGE_CACHE_ON_START` | `"false"` | Indicates whether to purge the entire Redis cache upon server startup. |
 | `PURGE_CACHE_COUNT` | `"20000"` | Number of keys to purge if `PURGE_CACHE_ON_START` is enabled. |
 | `PURGE_CACHE_PATTERN` | `"*.${DOMAIN_TLD_HOSTNAME}"` | Key pattern to purge if `PURGE_CACHE_ON_START` is enabled. |

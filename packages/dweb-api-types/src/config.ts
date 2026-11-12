@@ -102,6 +102,17 @@ export interface IAskEndpointConfig {
   };
 }
 
+export interface IClientRateLimitConfig {
+  getClientRateLimitConfig: () => {
+    // requests allowed per client ip and period, 0 disables the limit
+    getLimit: () => number;
+    // period in seconds
+    getPeriod: () => number;
+    // value for express "trust proxy", empty string leaves it unset
+    getTrustProxy: () => string;
+  };
+}
+
 export interface IConfigurationServerRouter {
   getRouterConfig: () => {
     getRouterListenPort: () => string;
