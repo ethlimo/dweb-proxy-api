@@ -79,6 +79,18 @@ export function runClustered(
 ): () => void {
   const { logger, metricsPort = 0, ...numericOpts } = opts;
   const raw = { ...DEFAULTS, ...numericOpts };
+  const metricsEnabled = metricsPort > 0;
+  const onMetricsError = (err: Error) => {
+    logger?.error("Metrics server error, metrics are not served", {
+      origin: "cluster.ts",
+      trace_id: "UNDEFINED_TRACE_ID",
+      context: {
+        errorMessage: err.message,
+        errorCode: (err as any)?.code,
+        metricsPort,
+      },
+    });
+  };
 
   // Validate and clamp all numeric options. For every option except
   // `workers`, invalid values (NaN, non-finite, or below the minimum)
@@ -116,11 +128,14 @@ export function runClustered(
   // process, run start() directly in the current process.
   if (!cluster.isPrimary || workerCount <= 1) {
     const cleanups: Array<() => void> = [];
-    if (cluster.isPrimary && metricsPort > 0) {
-      const metricsServer = startLocalMetricsServer(metricsPort);
+    if (cluster.isPrimary && metricsEnabled) {
+      const metricsServer = startLocalMetricsServer(
+        metricsPort,
+        onMetricsError,
+      );
       cleanups.push(() => metricsServer.close());
     }
-    void runWorker(start, o, logger, cleanups);
+    void runWorker(start, o, metricsEnabled, logger, cleanups);
     // runWorker populates `cleanups` asynchronously (after its first await).
     // Callers must flush pending microtasks (e.g. via setImmediate) before
     // invoking this handle to guarantee all teardown callbacks are registered.
@@ -133,8 +148,9 @@ export function runClustered(
   // Primary process: fork `workerCount` workers and supervise them.
   cluster.schedulingPolicy = cluster.SCHED_RR;
 
-  const metricsServer =
-    metricsPort > 0 ? startClusterMetricsServer(metricsPort) : null;
+  const metricsServer = metricsEnabled
+    ? startClusterMetricsServer(metricsPort, onMetricsError)
+    : null;
 
   const lastHeartbeat = new Map<number, number>();
   const restartTimestamps: number[] = [];
@@ -234,6 +250,7 @@ export function runClustered(
 async function runWorker(
   start: StartFn,
   o: ClusterNumericOptions,
+  metricsEnabled: boolean,
   logger?: ILoggerService,
   cleanups?: Array<() => void>,
 ): Promise<void> {
@@ -246,11 +263,16 @@ async function runWorker(
   let sockets = 0;
   let overloadedSince = 0;
 
-  startDefaultMetrics();
+  // nothing reads the metrics when the endpoint is off, so don't collect them
+  if (metricsEnabled) {
+    startDefaultMetrics();
+  }
 
   const registerServer = (server: NodeHttpServer) => {
     servers.add(server);
-    instrumentServer(server);
+    if (metricsEnabled) {
+      instrumentServer(server);
+    }
 
     server.requestTimeout = o.requestTimeoutMs;
     server.headersTimeout = o.headersTimeoutMs;

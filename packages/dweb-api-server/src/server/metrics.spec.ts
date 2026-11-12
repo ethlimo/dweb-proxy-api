@@ -2,6 +2,7 @@ import { describe, it } from "mocha";
 import { expect } from "chai";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { register } from "prom-client";
 import { instrumentServer, startLocalMetricsServer } from "./metrics.js";
 import { runClustered } from "./cluster.js";
 
@@ -41,7 +42,7 @@ describe("metrics", function () {
     const server = app().listen(0, "127.0.0.1");
     instrumentServer(server);
     const port = await listening(server);
-    const metricsServer = startLocalMetricsServer(await freePort());
+    const metricsServer = startLocalMetricsServer(await freePort(), () => {});
     const metricsPort = await listening(metricsServer);
 
     try {
@@ -90,6 +91,44 @@ describe("metrics", function () {
       // default node metrics are enabled by the worker
       expect(body).to.contain("process_cpu_seconds_total");
       expect(body).to.contain("nodejs_eventloop_lag_p99_seconds");
+    } finally {
+      stop();
+      server!.close();
+    }
+  });
+
+  it("keeps the process running when the metrics port is taken", async function () {
+    // same interfaces the metrics server listens on
+    const taken = http.createServer().listen(0);
+    const port = await listening(taken);
+    try {
+      const error = await new Promise<Error>((resolve) => {
+        startLocalMetricsServer(port, resolve);
+      });
+      expect((error as any).code).to.equal("EADDRINUSE");
+    } finally {
+      taken.close();
+    }
+  });
+
+  it("doesn't record anything when metricsPort is not set", async function () {
+    let server: http.Server | null = null;
+    const stop = runClustered(
+      (register) => {
+        server = app().listen(0, "127.0.0.1");
+        register(server);
+      },
+      { workers: 1 },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    try {
+      const port = await listening(server!);
+      await get(port, "/");
+      const recorded = await register.getSingleMetricAsString(
+        "dweb_http_requests_total",
+      );
+      expect(recorded).to.not.contain(`port="${port}"`);
     } finally {
       stop();
       server!.close();

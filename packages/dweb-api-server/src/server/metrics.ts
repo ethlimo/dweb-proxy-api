@@ -48,7 +48,10 @@ export function startDefaultMetrics() {
 }
 
 export function instrumentServer(server: http.Server) {
+  // looked up once, the server is listening by the time requests come in
+  let port: string | undefined;
   server.on("request", (_req, res) => {
+    port ??= String((server.address() as AddressInfo | null)?.port);
     const end = duration.startTimer();
     inflight.inc();
     let done = false;
@@ -56,11 +59,10 @@ export function instrumentServer(server: http.Server) {
       if (done) return;
       done = true;
       inflight.dec();
-      const port = String((server.address() as AddressInfo | null)?.port);
       // a closed connection without a response shows up as status 0
       const status = res.headersSent ? String(res.statusCode) : "0";
-      requests.inc({ port, status });
-      end({ port });
+      requests.inc({ port: port!, status });
+      end({ port: port! });
     };
     res.on("finish", finish);
     res.on("close", finish);
@@ -71,6 +73,7 @@ export function startMetricsServer(
   port: number,
   collect: () => Promise<string>,
   contentType: string,
+  onError: (error: Error) => void,
 ) {
   const server = http.createServer(async (req, res) => {
     if (req.method !== "GET" || req.url !== "/metrics") {
@@ -87,25 +90,36 @@ export function startMetricsServer(
       res.end();
     }
   });
+  // without a listener an error like EADDRINUSE would take the whole
+  // process down, metrics aren't worth that
+  server.on("error", onError);
   server.listen(port);
   return server;
 }
 
 // single process: serve this process' registry
-export function startLocalMetricsServer(port: number) {
+export function startLocalMetricsServer(
+  port: number,
+  onError: (error: Error) => void,
+) {
   return startMetricsServer(
     port,
     () => register.metrics(),
     register.contentType,
+    onError,
   );
 }
 
 // cluster primary: ask every worker for its metrics and merge them
-export function startClusterMetricsServer(port: number) {
+export function startClusterMetricsServer(
+  port: number,
+  onError: (error: Error) => void,
+) {
   const aggregator = new AggregatorRegistry();
   return startMetricsServer(
     port,
     () => aggregator.clusterMetrics(),
     aggregator.contentType,
+    onError,
   );
 }
