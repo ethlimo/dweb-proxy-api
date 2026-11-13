@@ -6,6 +6,22 @@ import type { ICacheService } from "dweb-api-types/cache";
 import * as z from "zod";
 import type { IRequestContext } from "dweb-api-types/request-context";
 import type { IDomainQueryConfig } from "dweb-api-types/config";
+import { ensNormalize } from "ethers";
+
+// The resolver hashes the ENS-normalized form of a name, so two names that
+// are spelled differently can still point at the same record (capital
+// letters, a unicode hyphen instead of "-", and so on). The blacklist has
+// to be checked against the normalized spelling as well, otherwise a
+// blocked name stays reachable under any of its other spellings.
+const namesToCheck = (domain: string): string[] => {
+  try {
+    const normalized = ensNormalize(domain);
+    return normalized === domain ? [domain] : [domain, normalized];
+  } catch {
+    // not a valid ENS name, the resolver won't accept it either
+    return [domain];
+  }
+};
 
 //passthrough because we want to preserve the full query response
 const DomainQueryValueCodec = z
@@ -44,9 +60,7 @@ export interface IDomainQuerySuperagentService {
   query: (domain: string) => Promise<Response | null>;
 }
 
-export class DomainQuerySuperagentService
-  implements IDomainQuerySuperagentService
-{
+export class DomainQuerySuperagentService implements IDomainQuerySuperagentService {
   _configurationService: IDomainQueryConfig;
   constructor(configurationService: IDomainQueryConfig) {
     this._configurationService = configurationService;
@@ -179,13 +193,15 @@ export class DomainQueryService implements IDomainQueryService {
       return false;
     }
 
-    const explode = domain.split(".");
+    for (const name of namesToCheck(domain)) {
+      const explode = name.split(".");
 
-    for (let i = 0; i < explode.length; i++) {
-      const subdomain = explode.slice(i).join(".");
-      const query = await this.domainQuery(request, subdomain);
-      if (query && query["blacklisted"]) {
-        return true;
+      for (let i = 0; i < explode.length; i++) {
+        const subdomain = explode.slice(i).join(".");
+        const query = await this.domainQuery(request, subdomain);
+        if (query && query["blacklisted"]) {
+          return true;
+        }
       }
     }
 
@@ -233,9 +249,7 @@ export class DomainQueryService implements IDomainQueryService {
   };
 }
 
-export class TestDomainQuerySuperagentService
-  implements IDomainQuerySuperagentService
-{
+export class TestDomainQuerySuperagentService implements IDomainQuerySuperagentService {
   blacklistMap: Map<string, boolean>;
   canonicalNameMap: Map<string, string>;
   public error = false;
