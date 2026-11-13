@@ -1,4 +1,9 @@
-import { FallbackProvider, JsonRpcProvider, AbstractProvider } from "ethers";
+import {
+  FallbackProvider,
+  FetchRequest,
+  JsonRpcProvider,
+  AbstractProvider,
+} from "ethers";
 import { ILoggerService } from "dweb-api-types/logger";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
@@ -14,6 +19,7 @@ import {
   IConfigurationEthereumFailover,
 } from "dweb-api-types/config";
 import { getContentHashFallback } from "./utils.js";
+import { FailoverJsonRpcProvider } from "./FailoverJsonRpcProvider.js";
 import { Interface } from "ethers";
 import { ICacheService } from "dweb-api-types/cache";
 import { executeHook } from "@ethlimo/ens-hooks";
@@ -107,45 +113,60 @@ export class EnsService implements INameService, IDataUrlResolverService {
     const primary_failover = failoverConfig.getPrimaryFailoverBackend();
     const secondary_failover = failoverConfig.getSecondaryFailoverBackend();
     const quorum = failoverConfig.getQuorum();
-    const providers = [
-      new JsonRpcProvider(rpc, undefined, {
-        staticNetwork: true,
-      }),
-    ];
+    // getProviderStallTimeout is the per request timeout (ETH_PROVIDER_TIMEOUT_MS)
+    // and getStallTimeout how long the fallback provider waits before also
+    // asking the next provider (ETH_PROVIDER_STALL_TIMEOUT_MS).
+    // The timeout has to be set on the FetchRequest passed to the provider,
+    // _getConnection() only returns a copy of it.
+    const endpoint = (url: string) => {
+      const request = new FetchRequest(url);
+      request.timeout = failoverConfig.getProviderStallTimeout();
+      return request;
+    };
+    const urls = [rpc];
     if (primary_failover) {
       logger.info("EnsService: adding failover_primary", {
         trace_id: "UNKNOWN_TRACE_ID",
         origin: "EnsService",
       });
-      providers.push(
-        new JsonRpcProvider(primary_failover, undefined, {
-          staticNetwork: true,
-        }),
-      );
+      urls.push(primary_failover);
     }
     if (secondary_failover) {
       logger.info("EnsService: adding failover_secondary", {
         trace_id: "UNKNOWN_TRACE_ID",
         origin: "EnsService",
       });
-      providers.push(
-        new JsonRpcProvider(secondary_failover, ethereumConfig.getChainId(), {
-          staticNetwork: true,
-        }),
-      );
+      urls.push(secondary_failover);
     }
+    // With quorum 1 the extra endpoints are only there for failover, so
+    // they're tried one after another (see FailoverJsonRpcProvider).
+    // FallbackProvider would return the primary's error instead.
+    // With a higher quorum every endpoint is its own provider and
+    // FallbackProvider compares their answers.
+    const providers: JsonRpcProvider[] =
+      quorum <= 1
+        ? [
+            new FailoverJsonRpcProvider(urls.map(endpoint), undefined, {
+              staticNetwork: true,
+            }),
+          ]
+        : urls.map(
+            (url) =>
+              new JsonRpcProvider(endpoint(url), undefined, {
+                staticNetwork: true,
+              }),
+          );
     const providers_as_config: {
       provider: JsonRpcProvider;
       priority: number;
       weight: number;
       stallTimeout: number;
     }[] = providers.map((provider, index) => {
-      provider._getConnection().timeout = failoverConfig.getStallTimeout();
       return {
         provider,
         priority: index,
         weight: 1,
-        stallTimeout: failoverConfig.getProviderStallTimeout(),
+        stallTimeout: failoverConfig.getStallTimeout(),
       };
     });
 
