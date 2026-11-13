@@ -23,6 +23,7 @@ import type {
   IClusterConfig,
 } from "dweb-api-types/config";
 import { parseRawConfig } from "dweb-api-resolver/HostnameSubstitutionService/parseRawConfig";
+import { extractExplicitPort } from "dweb-api-resolver/resolver/utils";
 export const VALID_ENS_TLDS = ["eth", "gno", "art"];
 
 /**
@@ -148,6 +149,11 @@ const configuration = {
     endpoint:
       (process.env.DATAURL_ENDPOINT && new URL(process.env.DATAURL_ENDPOINT)) ||
       undefined,
+    // new URL() drops :443 and :80, so remember the port as it was written
+    endpointPort:
+      (process.env.DATAURL_ENDPOINT &&
+        extractExplicitPort(process.env.DATAURL_ENDPOINT)) ||
+      null,
     server: {
       port:
         (process.env.DATAURL_PORT && Number(process.env.DATAURL_PORT)) || 12500,
@@ -659,12 +665,14 @@ export const configurationToIConfigurationKubo = (config: {
 export const configurationToIConfigurationDataUrlEndpoint = (config: {
   dataurl: {
     endpoint: URL | undefined;
+    endpointPort: string | null;
   };
 }): ICondfigurationDataUrlEndpoint => {
   return {
     getDataUrlConfig: () => {
       return {
         getConfigDataUrlEndpoint: () => config.dataurl.endpoint,
+        getConfigDataUrlEndpointPort: () => config.dataurl.endpointPort,
       };
     },
   };

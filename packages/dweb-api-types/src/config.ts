@@ -132,6 +132,8 @@ export interface IConfigurationKubo {
 export interface ICondfigurationDataUrlEndpoint {
   getDataUrlConfig: () => {
     getConfigDataUrlEndpoint: () => URL | undefined;
+    // the port as it is written in the endpoint, null when it has none
+    getConfigDataUrlEndpointPort?: () => string | null;
   };
 }
 
