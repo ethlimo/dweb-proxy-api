@@ -46,7 +46,8 @@
     "@types/url-regex-safe": "^1.0.0",
     "ioredis-mock": "^8.9.0",
     "node-mocks-http": "^1.14.1",
-    "url-regex-safe": "^4.0.0"
+    "url-regex-safe": "^4.0.0",
+    "viem": "2.44.1"
   },
   "type": "module"
 }

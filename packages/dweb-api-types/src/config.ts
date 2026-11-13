@@ -14,6 +14,8 @@ export interface IConfigurationIpfs {
 export interface IConfigurationArweave {
   getConfigArweaveBackend: () => {
     getBackend: () => string;
+    // ANT contract source tx ids that may be evaluated, see ArweaveResolver
+    getAntSourceWhitelist?: () => string[];
   };
 }
 

@@ -46,6 +46,7 @@ import {
 import { TestLoggerService, LoggerService } from "dweb-api-logger";
 import { NameServiceFactory } from "dweb-api-resolver/nameservice";
 import { Web3NameSdkService } from "dweb-api-resolver/nameservice/Web3NameSdkService";
+import { onlyFetchFrom } from "../services/fetchGuard.js";
 import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
 import { BasenamesService } from "dweb-api-resolver/nameservice/BasenamesService";
 import {
@@ -175,6 +176,9 @@ export const createApplicationConfigurationBindingsManager = async () => {
       new Web3NameSdkService(
         await configuration.getBinding(env),
         await logger.getBinding(env),
+        // only our RPC endpoints, which also stops viem from following
+        // CCIP-read urls that come from the resolver contract
+        onlyFetchFrom,
       ),
     [EnvironmentConfiguration.Development]: async () =>
       new TestResolverService(),
@@ -227,7 +231,12 @@ export const createApplicationConfigurationBindingsManager = async () => {
 
   const arweaveResolver = new EnvironmentBinding<IArweaveResolver>({
     [EnvironmentConfiguration.Production]: async (env) =>
-      new ArweaveResolver(await logger.getBinding(env)),
+      new ArweaveResolver(
+        await logger.getBinding(env),
+        (await configuration.getBinding(env))
+          .getConfigArweaveBackend()
+          .getAntSourceWhitelist?.() ?? [],
+      ),
     [EnvironmentConfiguration.Development]: async () =>
       new TestResolverService(),
   });

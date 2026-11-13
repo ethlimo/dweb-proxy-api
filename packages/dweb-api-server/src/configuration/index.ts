@@ -80,6 +80,10 @@ const configuration = {
   },
   arweave: {
     backend: process.env.ARWEAVE_TARGET || "https://arweave.net",
+    ant_source_whitelist: (process.env.ARWEAVE_ANT_SOURCE_WHITELIST ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
   },
   swarm: {
     backend: process.env.SWARM_TARGET || "https://api.gateway.ethswarm.org",
@@ -371,12 +375,14 @@ export const configurationToIConfigHostnameSubstitution = (config: {
 export const configurationToIConfigurationArweave = (config: {
   arweave: {
     backend: string;
+    ant_source_whitelist: string[];
   };
 }): IConfigurationArweave => {
   return {
     getConfigArweaveBackend: () => {
       return {
         getBackend: () => config.arweave.backend,
+        getAntSourceWhitelist: () => config.arweave.ant_source_whitelist,
       };
     },
   };

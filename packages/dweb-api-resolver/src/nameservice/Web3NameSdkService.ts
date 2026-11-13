@@ -13,18 +13,29 @@ import {
 } from "dweb-api-types/config";
 import { getContentHashFallback } from "./utils.js";
 
+// Runs the SDK call. The server passes one that limits which hosts the
+// SDK may reach (see onlyFetchFrom in dweb-api-server), the service worker
+// uses the default.
+export type SdkCallWrapper = <T>(
+  rpcEndpoints: string[],
+  fn: () => Promise<T>,
+) => Promise<T>;
+
 export class Web3NameSdkService implements INameService {
   _configurationService: IConfigurationGnosis & IConfigurationEthereum;
   _logger: ILoggerService;
   //type exposed by imports
   _web3name: ReturnType<typeof createWeb3Name>;
+  _wrapSdkCall: SdkCallWrapper;
 
   constructor(
     configurationService: IConfigurationGnosis & IConfigurationEthereum,
     logger: ILoggerService,
+    wrapSdkCall: SdkCallWrapper = (_endpoints, fn) => fn(),
   ) {
     this._configurationService = configurationService;
     this._logger = logger;
+    this._wrapSdkCall = wrapSdkCall;
     this._web3name = createWeb3Name({
       isDev: false,
       rpcUrl: this._configurationService
@@ -37,10 +48,15 @@ export class Web3NameSdkService implements INameService {
     request: IRequestContext,
     name: string,
   ): Promise<DecodedCodecString | DecodedDataUri | DecodedDataUrl | null> {
-    const res = await this._web3name.getContentHash({
-      name,
-      rpcUrl: this._configurationService.getConfigGnosisBackend().getBackend(),
-    });
+    const ethRpc = this._configurationService
+      .getConfigEthereumBackend()
+      .getBackend();
+    const gnoRpc = this._configurationService
+      .getConfigGnosisBackend()
+      .getBackend();
+    const res = await this._wrapSdkCall([ethRpc, gnoRpc], () =>
+      this._web3name.getContentHash({ name, rpcUrl: gnoRpc }),
+    );
     if (!res) {
       return null;
     }
