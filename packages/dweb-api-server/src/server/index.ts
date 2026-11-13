@@ -10,6 +10,7 @@ import {
   notSupported,
   blockedForLegalReasons,
   noContentHashSet,
+  errorHandler,
 } from "../expressErrors/index.js";
 import cors from "cors";
 import { IDomainQueryService } from "../services/DomainsQueryService/index.js";
@@ -551,6 +552,7 @@ export class Server extends SharedServer {
     const askRouterConfig = this._configurationService.getAskRouterConfig();
 
     proxyExpress.all("/{*splat}", this.proxyServer.bind(this));
+    proxyExpress.use(errorHandler(this._logger, "proxyServer"));
     const proxyServer = proxyExpress.listen(routerConfig.getRouterListenPort());
     registerServer(proxyServer);
 
@@ -569,6 +571,7 @@ export class Server extends SharedServer {
         await this._DnsQuery.dnsqueryGet(req, res);
       },
     );
+    dnsqueryExpress.use(errorHandler(this._logger, "dnsquery"));
 
     if (dnsqueryRouterConfig.getDnsqueryRouterEnabled()) {
       const dnsServer = dnsqueryExpress.listen(
@@ -588,6 +591,7 @@ export class Server extends SharedServer {
 
     if (askRouterConfig.getAskRouterEnabled()) {
       askExpress.get("/ask", this.caddy.bind(this));
+      askExpress.use(errorHandler(this._logger, "caddy"));
       const askServer = askExpress.listen(
         askRouterConfig.getAskRouterListenPort(),
         () => {

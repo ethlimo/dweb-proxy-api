@@ -3,7 +3,11 @@ import express from "express";
 import { getTraceIdFromRequest } from "../utils/index.js";
 import { SharedServer } from "./index.js";
 import { DecodedEIP8121HookSchema } from "dweb-api-types/ens-resolver";
-import { isError, errorBuilder } from "../expressErrors/index.js";
+import {
+  isError,
+  errorBuilder,
+  errorHandler,
+} from "../expressErrors/index.js";
 
 //this function should not copy
 function getByteLength(str: string) {
@@ -173,5 +177,6 @@ export class DataUrlProxy extends SharedServer {
         isError(res);
       });
     });
+    app.use(errorHandler(this._logger, "DataUrlProxy"));
   }
 }
