@@ -8,16 +8,16 @@ import type { IRequestContext } from "dweb-api-types/request-context";
 import type { IDomainQueryConfig } from "dweb-api-types/config";
 import { ensNormalize } from "ethers";
 
+// Nearly every request is a plain lowercase name. ENS leaves those
+// untouched, so there is nothing to normalize.
+const ALREADY_NORMALIZED = /^[a-z0-9.-]*$/;
+
 // The resolver hashes the ENS-normalized form of a name, so two names that
 // are spelled differently can still point at the same record (capital
 // letters, a unicode hyphen instead of "-", and so on). The blacklist has
 // to be checked against the normalized spelling as well, otherwise a
 // blocked name stays reachable under any of its other spellings.
-const ALREADY_NORMALIZED = /^[a-z0-9.-]*$/;
-
 const namesToCheck = (domain: string): string[] => {
-  // Nearly every request is a plain lowercase name. ENS leaves those
-  // untouched, so there is nothing to compare and we can skip the work.
   if (ALREADY_NORMALIZED.test(domain)) {
     return [domain];
   }
@@ -67,7 +67,9 @@ export interface IDomainQuerySuperagentService {
   query: (domain: string) => Promise<Response | null>;
 }
 
-export class DomainQuerySuperagentService implements IDomainQuerySuperagentService {
+export class DomainQuerySuperagentService
+  implements IDomainQuerySuperagentService
+{
   _configurationService: IDomainQueryConfig;
   constructor(configurationService: IDomainQueryConfig) {
     this._configurationService = configurationService;
@@ -256,7 +258,9 @@ export class DomainQueryService implements IDomainQueryService {
   };
 }
 
-export class TestDomainQuerySuperagentService implements IDomainQuerySuperagentService {
+export class TestDomainQuerySuperagentService
+  implements IDomainQuerySuperagentService
+{
   blacklistMap: Map<string, boolean>;
   canonicalNameMap: Map<string, string>;
   public error = false;

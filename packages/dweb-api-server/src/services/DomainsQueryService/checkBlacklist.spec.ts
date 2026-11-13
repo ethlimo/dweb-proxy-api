@@ -57,11 +57,17 @@ describe("DomainQueryService.checkBlacklist", () => {
     // checkBlacklist skips normalization for these, so make sure ENS really
     // never rewrites them
     const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-.";
+    // fixed seed, so a failure can be reproduced
+    let seed = 12345;
+    const next = (max: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % max;
+    };
     for (let i = 0; i < 2000; i++) {
       let name = "";
-      const length = 1 + Math.floor(Math.random() * 24);
+      const length = 1 + next(24);
       for (let j = 0; j < length; j++) {
-        name += alphabet[Math.floor(Math.random() * alphabet.length)];
+        name += alphabet[next(alphabet.length)];
       }
       let normalized = name;
       try {
@@ -89,9 +95,11 @@ describe("DomainQueryService.checkBlacklist", () => {
   // so the resolver returns the blocked record for each of them.
   const sameAfterNormalization = [
     ["capital letters", "My-Site.eth", BLOCKED],
-    ["a unicode hyphen", "my‐site.eth", BLOCKED],
-    ["an en dash", "my–site.eth", BLOCKED],
+    ["a unicode hyphen", "my\u2010site.eth", BLOCKED],
+    ["an en dash", "my\u2013site.eth", BLOCKED],
     ["capital letters under a subdomain", "app.MY-SITE.eth", `app.${BLOCKED}`],
+    // the form a DoH question for a DNSLink record arrives in
+    ["a _dnslink prefix", "_dnslink.My-Site.eth", `_dnslink.${BLOCKED}`],
   ];
 
   for (const [label, name, normalized] of sameAfterNormalization) {
