@@ -407,7 +407,25 @@ export class Server extends SharedServer {
           content: isError.ret,
         },
       });
-      this.requestHandler(request, isError.ret.record, req, res);
+      try {
+        await this.requestHandler(request, isError.ret.record, req, res);
+      } catch (e) {
+        // requestHandler can throw for records we can't map to a gateway
+        // url, e.g. an IPNS name too long for a DNS label. Answer with a
+        // 500 here instead of leaving the rejection unhandled.
+        this._logger.error("error while handling resolved record", {
+          ...request,
+          origin: "proxyServer",
+          context: {
+            error: e,
+            hostname: hostname,
+          },
+        });
+        if (!res.headersSent) {
+          res.writeHead(500);
+        }
+        res.end();
+      }
       return null;
     }
 

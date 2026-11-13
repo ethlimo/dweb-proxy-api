@@ -60,6 +60,7 @@ export class DomainQuerySuperagentService
     return await superagent
       .get(`${configuration.getDomainsApiEndpoint()}/query`)
       .query({ domain })
+      .timeout(configuration.getTimeoutMs())
       .ok((res) => res.status < 500);
   }
 }
