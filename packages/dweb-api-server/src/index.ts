@@ -99,6 +99,7 @@ import { runClustered } from "./server/cluster.js";
       noHeartbeatMs: clusterConfig.getNoHeartbeatMs(),
       catastrophicRestarts: clusterConfig.getCatastrophicRestarts(),
       catastrophicWindowMs: clusterConfig.getCatastrophicWindowMs(),
+      metricsPort: clusterConfig.getMetricsPort(),
       logger: resolvedLogger,
     });
   }

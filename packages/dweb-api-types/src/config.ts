@@ -153,5 +153,7 @@ export interface IClusterConfig {
     getNoHeartbeatMs: () => number;
     getCatastrophicRestarts: () => number;
     getCatastrophicWindowMs: () => number;
+    // 0 means the metrics endpoint is disabled
+    getMetricsPort: () => number;
   };
 }
