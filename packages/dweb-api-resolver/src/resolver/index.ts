@@ -93,6 +93,33 @@ function ipfsInternalPathRepresentationToCanonicalProtocolRepresentation(
   return contentIpfsInternalsSanitized;
 }
 
+// A DNSLink value has to be a plain domain name. It ends up in the
+// X-Content-Location host (subdomain mode) or in X-Content-Path, so anything
+// else, like a port, a slash or userinfo, would let the record owner point
+// the proxy at a different host or path.
+const DNSLINK_DOMAIN =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+
+function dnslinkDomainOrNull(
+  request: IRequestContext,
+  logger: ILoggerService,
+  value: string,
+  hostname: string,
+) {
+  if (DNSLINK_DOMAIN.test(value)) {
+    return value;
+  }
+  logger.info("IPNS value is neither a peer id nor a valid DNSLink domain", {
+    ...request,
+    origin: "getPeerId",
+    context: {
+      value: value,
+      hostname: hostname,
+    },
+  });
+  return null;
+}
+
 export function getPeerId(
   request: IRequestContext,
   logger: ILoggerService,
@@ -119,7 +146,7 @@ export function getPeerId(
           },
         },
       );
-      return value;
+      return dnslinkDomainOrNull(request, logger, value, hostname);
     } else if (
       err instanceof Error &&
       err.message.startsWith("Non-base36 character")
@@ -132,7 +159,7 @@ export function getPeerId(
           hostname: hostname,
         },
       });
-      return value;
+      return dnslinkDomainOrNull(request, logger, value, hostname);
     } else {
       logger.error("Error converting IPNS PeerID", {
         ...request,

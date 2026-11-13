@@ -140,6 +140,7 @@ export const recordToProxyRecord = async (
   } else if (record._tag === "Record") {
     if (record.codec === "ipfs-ns" || record.codec === "ipns-ns") {
       const url = new URL(ipfsConfig.getBackend());
+      const gatewayHost = url.host;
       var path = "/";
       const urlSafeIpfsOrIpns = recordNamespaceToUrlHandlerMap[record.codec];
       if (ipfsConfig.getSubdomainSupport()) {
@@ -170,6 +171,19 @@ export const recordToProxyRecord = async (
             },
           });
           throw new Error("IPNS name can not be encoded as a DNS fragment");
+        }
+        // The identifier comes from on-chain data. Make sure it only added
+        // labels in front of the gateway host and didn't replace the host.
+        if (!url.host.endsWith(`.${gatewayHost}`)) {
+          logger.error("content identifier changed the gateway host", {
+            ...request,
+            origin: "recordToProxyRecord",
+            context: {
+              record,
+              host: url.host,
+            },
+          });
+          throw new Error("content identifier changed the gateway host");
         }
       } else {
         path = `/${urlSafeIpfsOrIpns}/${record.DoHContentIdentifier}/`;

@@ -140,6 +140,8 @@ const configuration = {
     ttl: 60,
     endpoint: process.env.DOMAINSAPI_ENDPOINT,
     max_hops: 5, //e.g. asdf.limo -> whatever -> whatever.eth
+    // superagent treats 0 or NaN as "no timeout", so fall back to the default
+    timeout_ms: parsePositiveInt(process.env.DOMAINSAPI_TIMEOUT_MS, 5000),
   },
   logging: {
     level: process.env.LOG_LEVEL || "info",
@@ -483,6 +485,7 @@ export const configurationToIDomainQueryConfig = (config: {
   domainsapi: {
     endpoint: string | undefined;
     max_hops: number;
+    timeout_ms: number;
   };
 }): IDomainQueryConfig => {
   const endpoint = config.domainsapi.endpoint;
@@ -491,6 +494,7 @@ export const configurationToIDomainQueryConfig = (config: {
       (endpoint && {
         getDomainsApiEndpoint: () => endpoint,
         getMaxHops: () => config.domainsapi.max_hops,
+        getTimeoutMs: () => config.domainsapi.timeout_ms,
       }) ||
       null,
   };
