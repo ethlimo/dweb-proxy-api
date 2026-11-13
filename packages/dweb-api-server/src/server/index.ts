@@ -10,13 +10,18 @@ import {
   notSupported,
   blockedForLegalReasons,
   noContentHashSet,
+  errorHandler,
 } from "../expressErrors/index.js";
 import cors from "cors";
 import { IDomainQueryService } from "../services/DomainsQueryService/index.js";
 import { ILoggerService } from "dweb-api-types/logger";
 import { IDnsQuery } from "../dnsquery/index.js";
 import { IArweaveResolver } from "dweb-api-types/arweave";
-import { getDomainOfRequestFromGet, getTraceIdFromRequest } from "../utils/index.js";
+import {
+  getDomainOfRequestFromGet,
+  getTraceIdFromRequest,
+  isDomainNameTooLong,
+} from "../utils/index.js";
 import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
@@ -342,6 +347,10 @@ export class Server extends SharedServer {
     const request: IRequestContext = {
       trace_id,
     };
+    if (hostname && isDomainNameTooLong(hostname)) {
+      notSupported(res);
+      return null;
+    }
     try {
       isError = await this.proxyServerLogic(request, hostname);
     } catch (e) {
@@ -399,7 +408,25 @@ export class Server extends SharedServer {
           content: isError.ret,
         },
       });
-      this.requestHandler(request, isError.ret.record, req, res);
+      try {
+        await this.requestHandler(request, isError.ret.record, req, res);
+      } catch (e) {
+        // requestHandler can throw for records we can't map to a gateway
+        // url, e.g. an IPNS name too long for a DNS label. Answer with a
+        // 500 here instead of leaving the rejection unhandled.
+        this._logger.error("error while handling resolved record", {
+          ...request,
+          origin: "proxyServer",
+          context: {
+            error: e,
+            hostname: hostname,
+          },
+        });
+        if (!res.headersSent) {
+          res.writeHead(500);
+        }
+        res.end();
+      }
       return null;
     }
 
@@ -525,6 +552,7 @@ export class Server extends SharedServer {
     const askRouterConfig = this._configurationService.getAskRouterConfig();
 
     proxyExpress.all("/{*splat}", this.proxyServer.bind(this));
+    proxyExpress.use(errorHandler(this._logger, "proxyServer"));
     const proxyServer = proxyExpress.listen(routerConfig.getRouterListenPort());
     registerServer(proxyServer);
 
@@ -543,6 +571,7 @@ export class Server extends SharedServer {
         await this._DnsQuery.dnsqueryGet(req, res);
       },
     );
+    dnsqueryExpress.use(errorHandler(this._logger, "dnsquery"));
 
     if (dnsqueryRouterConfig.getDnsqueryRouterEnabled()) {
       const dnsServer = dnsqueryExpress.listen(
@@ -562,6 +591,7 @@ export class Server extends SharedServer {
 
     if (askRouterConfig.getAskRouterEnabled()) {
       askExpress.get("/ask", this.caddy.bind(this));
+      askExpress.use(errorHandler(this._logger, "caddy"));
       const askServer = askExpress.listen(
         askRouterConfig.getAskRouterListenPort(),
         () => {
