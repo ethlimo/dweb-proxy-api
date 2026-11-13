@@ -16,7 +16,11 @@ import { IDomainQueryService } from "../services/DomainsQueryService/index.js";
 import { ILoggerService } from "dweb-api-types/logger";
 import { IDnsQuery } from "../dnsquery/index.js";
 import { IArweaveResolver } from "dweb-api-types/arweave";
-import { getDomainOfRequestFromGet, getTraceIdFromRequest } from "../utils/index.js";
+import {
+  getDomainOfRequestFromGet,
+  getTraceIdFromRequest,
+  isDomainNameTooLong,
+} from "../utils/index.js";
 import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
@@ -342,6 +346,10 @@ export class Server extends SharedServer {
     const request: IRequestContext = {
       trace_id,
     };
+    if (hostname && isDomainNameTooLong(hostname)) {
+      notSupported(res);
+      return null;
+    }
     try {
       isError = await this.proxyServerLogic(request, hostname);
     } catch (e) {
