@@ -13,7 +13,14 @@ import { ensNormalize } from "ethers";
 // letters, a unicode hyphen instead of "-", and so on). The blacklist has
 // to be checked against the normalized spelling as well, otherwise a
 // blocked name stays reachable under any of its other spellings.
+const ALREADY_NORMALIZED = /^[a-z0-9.-]*$/;
+
 const namesToCheck = (domain: string): string[] => {
+  // Nearly every request is a plain lowercase name. ENS leaves those
+  // untouched, so there is nothing to compare and we can skip the work.
+  if (ALREADY_NORMALIZED.test(domain)) {
+    return [domain];
+  }
   try {
     const normalized = ensNormalize(domain);
     return normalized === domain ? [domain] : [domain, normalized];

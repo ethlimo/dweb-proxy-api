@@ -1,6 +1,6 @@
 import { describe, it } from "mocha";
 import { expect } from "chai";
-import { namehash } from "ethers";
+import { ensNormalize, namehash } from "ethers";
 import { PassthroughCacheService } from "dweb-api-cache/passthrough";
 import {
   DomainQueryService,
@@ -33,6 +33,46 @@ const createService = () => {
 };
 
 describe("DomainQueryService.checkBlacklist", () => {
+  it("only looks a plain lowercase name up once per suffix", async () => {
+    const domainsApi = new TestDomainQuerySuperagentService();
+    const asked: string[] = [];
+    const query = domainsApi.query;
+    domainsApi.query = async (domain: string) => {
+      asked.push(domain);
+      return query(domain);
+    };
+    const service = new DomainQueryService(
+      logger,
+      domainsApi,
+      new PassthroughCacheService(),
+      config,
+    );
+
+    await service.checkBlacklist(request, "app.some-site.eth");
+
+    expect(asked).to.deep.equal(["app.some-site.eth", "some-site.eth", "eth"]);
+  });
+
+  it("leaves plain lowercase names alone, like ENS does", () => {
+    // checkBlacklist skips normalization for these, so make sure ENS really
+    // never rewrites them
+    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-.";
+    for (let i = 0; i < 2000; i++) {
+      let name = "";
+      const length = 1 + Math.floor(Math.random() * 24);
+      for (let j = 0; j < length; j++) {
+        name += alphabet[Math.floor(Math.random() * alphabet.length)];
+      }
+      let normalized = name;
+      try {
+        normalized = ensNormalize(name);
+      } catch {
+        // rejected by ENS, e.g. an empty label
+      }
+      expect(normalized).to.equal(name);
+    }
+  });
+
   it("blocks a listed name", async () => {
     expect(await createService().checkBlacklist(request, BLOCKED)).to.equal(
       true,
