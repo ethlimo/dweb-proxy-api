@@ -34,7 +34,10 @@ __Gateway request flow__
 | `ASK_ENABLED` | `"false"`      |    Whether to spawn a special listener for responding to 
 | `ASK_LISTEN_PORT` | `"9090"`      |    Ask listener port. |certificate issuance requests from Caddy server: `:9090/ask?domain=${name}.eth`. |
 | `ETH_RPC_ENDPOINT` | `"http://192.168.1.7:8845"` | Primary RPC provider FQDN for ENS resolution. |
-| `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | Secondary failover RPC provider FQDN. |
+| `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | First failover RPC provider FQDN. |
+| `ETH_RPC_ENDPOINT_FAILOVER_SECONDARY` | `null` | Second failover RPC provider FQDN. |
+| `ETH_PROVIDER_QUORUM` | `1` | How many of the configured Ethereum RPC providers have to return the same result. With `1` the answer of a single provider is trusted, so a compromised or misbehaving RPC can return any contenthash. Setting it to `2` with two providers makes lookups fail when they disagree, and `2` with three providers uses the majority. It can't be higher than the number of providers, the service won't start in that case. Use providers run by different operators for this to mean anything. |
+| `ETH_CHAIN_ID` | `1` | Chain id the Ethereum RPC providers are expected to serve. |
 | `GNO_RPC_ENDPOINT` |  `https://rpc.gnosischain.com` | Primary RPC endpoint for Gnosis. |
 | `BASE_RPC_ENDPOINT` | `https://mainnet.base.org` | Primary RPC endpoint for Base L2 (Basenames `*.base.eth` resolution). |
 | `BASE_L2_BYPASS_ENABLED` | `"true"` | Resolve `*.base.eth` contenthash records directly against the Basenames registry on Base L2, bypassing the Coinbase CCIP gateway (which does not serve contenthash records). Set to `false` to fall back to standard L1 ENS resolution. |
