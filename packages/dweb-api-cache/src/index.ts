@@ -243,6 +243,7 @@ export class RedisCacheService implements ICacheService {
     const cacheConfig = this._configurationService.getCacheConfig();
     const cKey = `${dbPrefix}/${key}`;
     const defaultTtl = cacheConfig.getTtl();
+    let thunkCalled = false;
     try {
       var cachedValue = await this._redisClient.get(cKey);
       const redisTTL = await this._redisClient.ttl(cKey);
@@ -272,6 +273,7 @@ export class RedisCacheService implements ICacheService {
         }
       }
 
+      thunkCalled = true;
       const result = await fThunk();
       try {
         this._logger.info("Setting cache value", {
@@ -298,6 +300,11 @@ export class RedisCacheService implements ICacheService {
       }
       return result;
     } catch (e) {
+      // If fThunk itself failed there is no point in calling it again, the
+      // fallback below is only meant for when redis is unavailable.
+      if (thunkCalled) {
+        throw e;
+      }
       this._logger.error("received error when querying cache", {
         ...request,
         origin: "RedisCacheService",
@@ -352,6 +359,11 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
     const cacheConfig = this._configurationService.getCacheConfig();
     const cKey = `${dbPrefix}/${key}`;
     const defaultTtl = cacheConfig.getTtl();
+    let thunkCalled = false;
+    const trackedThunk = () => {
+      thunkCalled = true;
+      return fThunk();
+    };
 
     try {
       const cachedValue = await this._innerMemoryCache.get<RT>(request, cKey);
@@ -372,15 +384,21 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
 
       const result = await this._innerRedis.memoize<RT>(
         request,
-        fThunk,
+        trackedThunk,
         schema,
         dbPrefix,
         key,
       );
-      const ttl = Math.min(
-        (await this._innerRedis.getTtl(request, dbPrefix, key)) || defaultTtl,
-        defaultTtl,
-      );
+      let ttl = defaultTtl;
+      try {
+        ttl = Math.min(
+          (await this._innerRedis.getTtl(request, dbPrefix, key)) || defaultTtl,
+          defaultTtl,
+        );
+      } catch {
+        // redis is unavailable, we already have the value so just keep it
+        // in memory with the default ttl
+      }
       this._logger.info("setting cached value for via memory cache", {
         ...request,
         origin: "LocallyCachedRedisCacheService",
@@ -393,6 +411,9 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
       this._innerMemoryCache.put<RT>(request, cKey, result, ttl);
       return result;
     } catch (e) {
+      if (thunkCalled) {
+        throw e;
+      }
       this._logger.error("memoize error", {
         ...request,
         origin: "LocallyCachedRedisCacheService",
