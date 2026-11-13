@@ -48,6 +48,10 @@ import { NameServiceFactory } from "dweb-api-resolver/nameservice";
 import { Web3NameSdkService } from "dweb-api-resolver/nameservice/Web3NameSdkService";
 import { EnsService } from "dweb-api-resolver/nameservice/EnsService";
 import { BasenamesService } from "dweb-api-resolver/nameservice/BasenamesService";
+import {
+  restrictCcipRead,
+  restrictFallbackProviderCcipRead,
+} from "../services/ccip.js";
 
 export const createApplicationConfigurationBindingsManager = async () => {
   const configuration = new EnvironmentBinding<ServerConfiguration>({
@@ -184,6 +188,7 @@ export const createApplicationConfigurationBindingsManager = async () => {
       await cacheService.getBinding(env),
       await logger.getBinding(env),
     );
+    restrictFallbackProviderCcipRead(v.provider, await logger.getBinding(env));
     await v.init();
     return v;
   };
@@ -195,11 +200,14 @@ export const createApplicationConfigurationBindingsManager = async () => {
   });
 
   const basenamesService = new EnvironmentBinding<INameService>({
-    [EnvironmentConfiguration.Production]: async (env) =>
-      new BasenamesService(
+    [EnvironmentConfiguration.Production]: async (env) => {
+      const basenames = new BasenamesService(
         await configuration.getBinding(env),
         await logger.getBinding(env),
-      ),
+      );
+      restrictCcipRead(basenames.provider, await logger.getBinding(env));
+      return basenames;
+    },
     [EnvironmentConfiguration.Development]: async () =>
       new TestResolverService(),
   });
