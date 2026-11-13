@@ -80,6 +80,7 @@ export interface IDomainQueryConfig {
   getDomainQueryConfig: () => {
     getDomainsApiEndpoint: () => string;
     getMaxHops: () => number;
+    getTimeoutMs: () => number;
   } | null;
 }
 
