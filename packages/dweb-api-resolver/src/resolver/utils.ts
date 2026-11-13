@@ -127,12 +127,17 @@ export const recordToProxyRecord = async (
         record: record,
       };
     }
-    const redirectUrl = new URL(
-      socialsEndpointConfig.getEnsSocialsEndpoint(record.ensName),
+    const endpoint = socialsEndpointConfig.getEnsSocialsEndpoint(
+      record.ensName,
     );
+    const redirectUrl = new URL(endpoint);
+    // url.origin drops :443 and :80 even when the endpoint spells them out
+    const explicitPort = extractExplicitPort(endpoint);
     return {
       ...record,
-      XContentLocation: redirectUrl.origin,
+      XContentLocation: explicitPort
+        ? `${redirectUrl.protocol}//${redirectUrl.hostname}:${explicitPort}`
+        : redirectUrl.origin,
       XContentPath: ensureTrailingSlash(
         redirectUrl.pathname + redirectUrl.search,
       ),
@@ -190,7 +195,12 @@ export const recordToProxyRecord = async (
       }
       return {
         ...record,
-        XContentLocation: url.toString(),
+        // same as for arweave and ton below: url.toString() would drop an
+        // explicit :443 from IPFS_TARGET
+        XContentLocation: constructUrlWithPort(
+          url,
+          extractExplicitPort(ipfsConfig.getBackend()),
+        ),
         XContentPath: path,
         overrideCodecHeader,
       };

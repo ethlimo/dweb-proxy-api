@@ -239,8 +239,17 @@ export class SharedServer {
       const data = content.data;
       const contentFrag = `/api/v1/dataurl/${encodeURIComponent(content.ensname)}/${Buffer.from(JSON.stringify(data)).toString("base64url")}`;
       const newEndpoint = new URL(dataUrlConfig);
+      // url.host has no port when the endpoint says :443 or :80, the other
+      // targets keep it in that case
+      const explicitPort = this._configurationService
+        .getDataUrlConfig()
+        .getConfigDataUrlEndpointPort?.();
       res.writeHead(200, {
-        "X-Content-Location": sanitizeXContentLocation(newEndpoint.host),
+        "X-Content-Location": sanitizeXContentLocation(
+          explicitPort
+            ? `${newEndpoint.hostname}:${explicitPort}`
+            : newEndpoint.host,
+        ),
         "X-Content-Path": ensureTrailingSlash(contentFrag),
       });
       res.end();
