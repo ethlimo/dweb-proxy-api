@@ -16,7 +16,11 @@ import { IDomainQueryService } from "../services/DomainsQueryService/index.js";
 import { ILoggerService } from "dweb-api-types/logger";
 import { IDnsQuery } from "../dnsquery/index.js";
 import { IArweaveResolver } from "dweb-api-types/arweave";
-import { getDomainOfRequestFromGet, getTraceIdFromRequest } from "../utils/index.js";
+import {
+  getDomainOfRequestFromGet,
+  getTraceIdFromRequest,
+  isDomainNameTooLong,
+} from "../utils/index.js";
 import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
@@ -342,6 +346,10 @@ export class Server extends SharedServer {
     const request: IRequestContext = {
       trace_id,
     };
+    if (hostname && isDomainNameTooLong(hostname)) {
+      notSupported(res);
+      return null;
+    }
     try {
       isError = await this.proxyServerLogic(request, hostname);
     } catch (e) {
@@ -399,7 +407,25 @@ export class Server extends SharedServer {
           content: isError.ret,
         },
       });
-      this.requestHandler(request, isError.ret.record, req, res);
+      try {
+        await this.requestHandler(request, isError.ret.record, req, res);
+      } catch (e) {
+        // requestHandler can throw for records we can't map to a gateway
+        // url, e.g. an IPNS name too long for a DNS label. Answer with a
+        // 500 here instead of leaving the rejection unhandled.
+        this._logger.error("error while handling resolved record", {
+          ...request,
+          origin: "proxyServer",
+          context: {
+            error: e,
+            hostname: hostname,
+          },
+        });
+        if (!res.headersSent) {
+          res.writeHead(500);
+        }
+        res.end();
+      }
       return null;
     }
 

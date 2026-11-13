@@ -39,6 +39,7 @@ __Gateway request flow__
 | `BASE_RPC_ENDPOINT` | `https://mainnet.base.org` | Primary RPC endpoint for Base L2 (Basenames `*.base.eth` resolution). |
 | `BASE_L2_BYPASS_ENABLED` | `"true"` | Resolve `*.base.eth` contenthash records directly against the Basenames registry on Base L2, bypassing the Coinbase CCIP gateway (which does not serve contenthash records). Set to `false` to fall back to standard L1 ENS resolution. |
 | `DOMAINSAPI_ENDPOINT` | `null` | API endpoint for custom domain routing logic. Can be set to any endpoint that returns a `200` if you do not need this feature. |
+| `DOMAINSAPI_TIMEOUT_MS` | `5000` | Timeout in milliseconds for requests to `DOMAINSAPI_ENDPOINT`. |
 | `LOG_LEVEL` | `"info"` | Set the logging level. |
 | `LIMO_HOSTNAME_SUBSTITUTION_CONFIG` | `{ "eth.limo": "eth", "eth.local": "eth", "gno.limo": "gno", "gno.local": "gno" }` | The domains and services corresponding to each domain name for gateway operations. When set via an environment variable, this must be a base64 encoded JSON object. |
 | `DOMAIN_TLD_HOSTNAME` | `"eth"` | Subdomain to use with gateway (naming service dependent). For example, `ens.eth.limo`. Contingent upon the setting of `DOMAIN_TLD` for gateway operations. |

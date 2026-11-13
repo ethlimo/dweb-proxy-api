@@ -32,6 +32,15 @@ export function getDomainOfRequestFromGet(
   }
 }
 
+// Longest name DNS allows (RFC 1035), not counting the trailing dot.
+// Anything longer can't be a real ENS/DNS name, and the blacklist check
+// does one domains api lookup per label, so we reject these up front.
+export const MAX_DOMAIN_NAME_LENGTH = 253;
+
+export function isDomainNameTooLong(name: string) {
+  return name.length > MAX_DOMAIN_NAME_LENGTH;
+}
+
 export function hostnameIsENSTLD(hostname: string) {
   return (
     VALID_ENS_TLDS.find((tld) => hostname.endsWith("." + tld)) !== undefined
