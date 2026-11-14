@@ -24,6 +24,23 @@ const createDefaultDomainQueryValue = (domain: string): DomainQueryValue => ({
 
 export type DomainQueryValue = z.infer<typeof DomainQueryValueCodec>;
 
+// Thrown from inside the cached lookup when the domains api gave no usable
+// answer (an error status other than 404, or a body we can't parse).
+// domainQuery still serves `fallback` for that request, but because the
+// lookup threw, memoize doesn't store it: otherwise a blacklisted domain
+// would be served for a whole cache ttl after a single failed request.
+export class DomainsApiUnavailableError extends Error {
+  readonly domain: string;
+  readonly fallback: DomainQueryValue;
+
+  constructor(domain: string, reason: string) {
+    super(`domains api gave no usable answer for ${domain}: ${reason}`);
+    this.name = "DomainsApiUnavailableError";
+    this.domain = domain;
+    this.fallback = createDefaultDomainQueryValue(domain);
+  }
+}
+
 export interface IDomainQueryService {
   domainQuery: (
     request: IRequestContext,
@@ -84,14 +101,22 @@ export class DomainQueryService implements IDomainQueryService {
   domainQuery = async (
     request: IRequestContext,
     domain: string,
-  ): Promise<DomainQueryValue> =>
-    this._cacheService.memoize(
-      request,
-      () => this.domainQueryInternal(request, domain),
-      DomainQueryValueCodec,
-      "domainQuery",
-      domain,
-    );
+  ): Promise<DomainQueryValue> => {
+    try {
+      return await this._cacheService.memoize(
+        request,
+        () => this.domainQueryInternal(request, domain),
+        DomainQueryValueCodec,
+        "domainQuery",
+        domain,
+      );
+    } catch (e) {
+      if (e instanceof DomainsApiUnavailableError) {
+        return e.fallback;
+      }
+      throw e;
+    }
+  };
   domainQueryInternal = async (
     request: IRequestContext,
     domain: string,
@@ -152,7 +177,11 @@ export class DomainQueryService implements IDomainQueryService {
             endpoint: endpoint,
           },
         });
-        //FIXME: might be necessary to assume blacklist if we get a 500? we need to pass a value that doesn't get cached
+        //FIXME: might be necessary to assume blacklist if we get a 500?
+        throw new DomainsApiUnavailableError(
+          domain,
+          `status ${ret.error.status}`,
+        );
       }
       return createDefaultDomainQueryValue(domain);
     } else {
@@ -170,7 +199,7 @@ export class DomainQueryService implements IDomainQueryService {
             error: e,
           },
         });
-        return createDefaultDomainQueryValue(domain);
+        throw new DomainsApiUnavailableError(domain, "unreadable response");
       }
     }
   };
