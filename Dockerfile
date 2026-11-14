@@ -38,6 +38,7 @@ EXPOSE 8080 9090 11000 12500
 
 # Node options to use openssl CA certificates
 ENV NODE_OPTIONS="--import=extensionless/register --use-openssl-ca"
+ENV NODE_ENV=production
 
 CMD ["packages/dweb-api-server/dist/index.js"]
 
