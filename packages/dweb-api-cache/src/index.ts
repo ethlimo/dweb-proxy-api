@@ -8,6 +8,7 @@ import { IRedisClient } from "dweb-api-types/redis";
 import { ICacheService, INamedMemoryCache } from "dweb-api-types/cache";
 import { ZodType } from "zod";
 import { ICacheConfig, IRedisConfig } from "dweb-api-types/config";
+import { InflightLookups } from "./inflight.js";
 
 interface TheRedisPartsWeUse {
   get: typeof Redis.prototype.get;
@@ -332,6 +333,9 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
   _innerMemoryCache: INamedMemoryCache;
   _logger: ILoggerService;
   _configurationService: IRedisConfig & ICacheConfig;
+  // A healthy lookup is one or two rpc round trips, so 5s leaves plenty of
+  // room while not letting new requests pile onto one that hangs.
+  private _inflight = new InflightLookups(5000);
 
   public constructor(
     logger: ILoggerService,
@@ -356,9 +360,70 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
     dbPrefix: string,
     key: string,
   ): Promise<Awaited<RT>> {
-    const cacheConfig = this._configurationService.getCacheConfig();
     const cKey = `${dbPrefix}/${key}`;
-    const defaultTtl = cacheConfig.getTtl();
+    let cachedValue: Awaited<RT> | undefined;
+    try {
+      cachedValue = await this._innerMemoryCache.get<Awaited<RT>>(
+        request,
+        cKey,
+      );
+    } catch (e) {
+      this._logger.error("memoize error", {
+        ...request,
+        origin: "LocallyCachedRedisCacheService",
+        context: {
+          key: cKey,
+          error: e,
+        },
+      });
+      return fThunk();
+    }
+
+    if (cachedValue) {
+      this._logger.info(
+        "LocallyCachedRedisCacheService: returning cached value memory cache",
+        {
+          ...request,
+          origin: "LocallyCachedRedisCacheService",
+          context: {
+            key: cKey,
+            value: cachedValue,
+          },
+        },
+      );
+      return cachedValue;
+    }
+
+    // Only misses are shared, hits above don't touch the inflight map.
+    const joining = this._inflight.joinable(cKey);
+    if (joining) {
+      // the lookup logs under the trace id of the request that started it,
+      // this ties our request to those lines
+      this._logger.debug("waiting for a lookup another request started", {
+        ...request,
+        origin: "LocallyCachedRedisCacheService",
+        context: {
+          key: cKey,
+          startedBy: joining.startedBy,
+        },
+      });
+    }
+    return this._inflight.run(cKey, request.trace_id, () =>
+      this._lookup(request, fThunk, schema, dbPrefix, key),
+    );
+  }
+
+  // What memoize does after a memory cache miss: redis, and fThunk when
+  // redis doesn't have it.
+  private async _lookup<RT>(
+    request: IRequestContext,
+    fThunk: () => Promise<Awaited<RT>>,
+    schema: ZodType<RT>,
+    dbPrefix: string,
+    key: string,
+  ): Promise<Awaited<RT>> {
+    const cKey = `${dbPrefix}/${key}`;
+    const defaultTtl = this._configurationService.getCacheConfig().getTtl();
     let thunkCalled = false;
     const trackedThunk = () => {
       thunkCalled = true;
@@ -366,22 +431,6 @@ export class LocallyCachedRedisCacheService<T> implements ICacheService {
     };
 
     try {
-      const cachedValue = await this._innerMemoryCache.get<RT>(request, cKey);
-      if (cachedValue) {
-        this._logger.info(
-          "LocallyCachedRedisCacheService: returning cached value memory cache",
-          {
-            ...request,
-            origin: "LocallyCachedRedisCacheService",
-            context: {
-              key: cKey,
-              value: cachedValue,
-            },
-          },
-        );
-        return cachedValue;
-      }
-
       const result = await this._innerRedis.memoize<RT>(
         request,
         trackedThunk,
