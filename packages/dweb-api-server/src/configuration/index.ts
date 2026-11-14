@@ -117,6 +117,8 @@ const configuration = {
       //configuration.ask.rate.period: input in minutes, actual value in seconds
       period: Number(process.env.ASK_RATE_PERIOD ?? 15) * 60,
       enabled: false, //set via limit = 0
+      //all hostnames below one registered name together, see AskRateLimiter
+      name_limit: Number(process.env.ASK_NAME_RATE_LIMIT ?? 100),
     },
     //this is applied before the suffix transformation
     max_label_limit: Number(process.env.ASK_MAX_LABEL_LIMIT ?? 10),
@@ -340,6 +342,7 @@ export const configurationToIAskEndpointConfig = (config: {
       limit: number;
       period: number;
       enabled: boolean;
+      name_limit: number;
     };
     max_label_limit: number;
   };
@@ -350,6 +353,7 @@ export const configurationToIAskEndpointConfig = (config: {
         getRateLimit: () => config.ask.rate.limit,
         getRatePeriod: () => config.ask.rate.period,
         getRateEnabled: () => config.ask.rate.enabled,
+        getRegisteredNameRateLimit: () => config.ask.rate.name_limit,
         getMaxLabelLimit: () => config.ask.max_label_limit,
       };
     },

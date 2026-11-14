@@ -23,6 +23,7 @@ import {
   isDomainNameTooLong,
 } from "../utils/index.js";
 import { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
+import { AskRateLimiter } from "./askRateLimit.js";
 import { IRequestContext } from "dweb-api-types/request-context";
 import {
   ensureTrailingSlash,
@@ -340,6 +341,11 @@ export class SharedServer {
 }
 
 export class Server extends SharedServer {
+  private askRateLimiter = new AskRateLimiter(
+    this._configurationService,
+    this._domainRateLimitService,
+  );
+
   proxyServer = async (req: Request, res: Response): Promise<null> => {
     const hostname: string | null = this.parseHostnameFromRequest(req);
     let isError: ProxyServerLogicRet;
@@ -480,19 +486,16 @@ export class Server extends SharedServer {
       return null;
     }
 
-    if (askEndpointConfig.getRateEnabled() && !req.headers["x-health-check"]) {
-      const rateLimited = await this._domainRateLimitService.incrementRateLimit(
-        request,
-        hostname,
-        askEndpointConfig.getRateLimit(),
-        askEndpointConfig.getRatePeriod(),
-      );
-      if (rateLimited.countOverMax) {
+    if (!req.headers["x-health-check"]) {
+      const rateLimited = await this.askRateLimiter.check(request, hostname);
+      if (rateLimited.limited) {
         this._logger.error("rate limited", {
           ...request,
           origin: "caddy",
           context: {
             hostname: hostname,
+            scope: rateLimited.scope,
+            key: rateLimited.key,
           },
         });
         res.writeHead(429);

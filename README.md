@@ -33,6 +33,7 @@ __Gateway request flow__
 | `CACHE_TTL`     | `"300"`      |   TTL to persist resolved records |
 | `ASK_ENABLED` | `"false"`      |    Whether to spawn a special listener for responding to 
 | `ASK_LISTEN_PORT` | `"9090"`      |    Ask listener port. |certificate issuance requests from Caddy server: `:9090/ask?domain=${name}.eth`. |
+| `ASK_NAME_RATE_LIMIT` | `100` | Certificate requests per `ASK_RATE_PERIOD` for all hostnames below one registered name together (`name.eth`, `name.gno`, `name.base.eth`), on top of the limit per hostname. Only applies while the ask rate limit is on (`ASK_RATE_LIMIT` > 0). `0` turns it off. |
 | `ETH_RPC_ENDPOINT` | `"http://192.168.1.7:8845"` | Primary RPC provider FQDN for ENS resolution. |
 | `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | Secondary failover RPC provider FQDN. |
 | `GNO_RPC_ENDPOINT` |  `https://rpc.gnosischain.com` | Primary RPC endpoint for Gnosis. |
