@@ -24,6 +24,9 @@ import type {
 } from "dweb-api-types/config";
 import { recordNamespaceToUrlHandlerMap } from "dweb-api-resolver/resolver/const";
 import { punycodeDomainPartsToUnicode } from "dweb-api-resolver/punycodeConverter";
+
+const MAX_QUESTIONS = 5;
+
 type DoHPacket = {
   Status: string;
   TC: boolean;
@@ -144,7 +147,7 @@ export class DnsQuery implements IDnsQuery {
     if (!dnsRequest.questions) {
       dnsRequest.questions = [];
     }
-    if (dnsRequest.questions.length > 5) {
+    if (dnsRequest.questions.length > MAX_QUESTIONS) {
       return {
         error: true,
         code: 400,
@@ -240,6 +243,13 @@ export class DnsQuery implements IDnsQuery {
         },
       });
       errorBuilder(res, 500);
+      return;
+    }
+
+    // handleDnsQuery rejects these too, but only after the blacklist loop
+    // below has looked up every name of every question
+    if ((dnsRequest.questions?.length ?? 0) > MAX_QUESTIONS) {
+      errorBuilder(res, 400, "Too many questions");
       return;
     }
 
