@@ -7,6 +7,7 @@ import {
   applyTrustProxy,
   clientKey,
   clientRateLimit,
+  hashedClientKey,
 } from "./clientRateLimit.js";
 
 const noop = () => {};
@@ -108,10 +109,51 @@ describe("clientRateLimit", function () {
     expect(await get(port, { "x-forwarded-for": "1.1.1.1" })).to.equal(200);
     expect(await get(port, { "x-forwarded-for": "2.2.2.2" })).to.equal(200);
     expect(await get(port, { "x-forwarded-for": "1.1.1.1" })).to.equal(429);
-    expect([...service.keys.keys()].sort()).to.deep.equal([
-      "client/1.1.1.1",
-      "client/2.2.2.2",
-    ]);
+    expect(service.keys.size).to.equal(2);
+  });
+
+  it("doesn't put client addresses in the store keys or the logs", async function () {
+    const logged: unknown[] = [];
+    const recordingLogger = {
+      debug: (...args: unknown[]) => logged.push(args),
+      info: (...args: unknown[]) => logged.push(args),
+      warn: (...args: unknown[]) => logged.push(args),
+      error: (...args: unknown[]) => logged.push(args),
+    } as any;
+    const service = memoryRateLimit();
+    const app = express();
+    applyTrustProxy(app, "loopback");
+    app.use(clientRateLimit(config(1), service as any, recordingLogger));
+    const port = await start(app);
+
+    // the second request goes over the limit and gets logged
+    await get(port, { "x-forwarded-for": "203.0.113.7" });
+    expect(await get(port, { "x-forwarded-for": "203.0.113.7" })).to.equal(429);
+    server!.close();
+
+    const broken = express();
+    applyTrustProxy(broken, "loopback");
+    broken.use(
+      clientRateLimit(
+        config(1),
+        {
+          incrementRateLimit: async () => {
+            throw new Error("redis down");
+          },
+        } as any,
+        recordingLogger,
+      ),
+    );
+    const brokenPort = await start(broken);
+    await get(brokenPort, { "x-forwarded-for": "203.0.113.7" });
+
+    expect(logged.length).to.be.greaterThan(0);
+    expect(
+      JSON.stringify(logged, (_k, v) => (v instanceof Error ? v.message : v)),
+    ).to.not.include("203.0.113.7");
+    for (const key of service.keys.keys()) {
+      expect(key).to.not.include("203.0.113.7");
+    }
   });
 
   it("lets requests through when the rate limit store fails", async function () {
@@ -157,5 +199,27 @@ describe("clientKey", function () {
     expect(clientKey("::1")).to.equal("0:0:0:0::/64");
     expect(clientKey("fe80::1%eth0")).to.equal("fe80:0:0:0::/64");
     expect(clientKey("64:ff9b::1.2.3.4")).to.equal("64:ff9b:0:0::/64");
+  });
+});
+
+describe("hashedClientKey", function () {
+  it("gives the same key for the same client and different ones otherwise", function () {
+    expect(hashedClientKey("1.2.3.4")).to.equal(
+      hashedClientKey("::ffff:1.2.3.4"),
+    );
+    expect(hashedClientKey("2001:db8:1:2::1")).to.equal(
+      hashedClientKey("2001:db8:1:2:ffff::42"),
+    );
+    expect(hashedClientKey("1.2.3.4")).to.not.equal(hashedClientKey("1.2.3.5"));
+  });
+
+  it("depends on the secret, so processes with the same one share a key", function () {
+    expect(hashedClientKey("1.2.3.4", "a")).to.equal(
+      hashedClientKey("1.2.3.4", "a"),
+    );
+    expect(hashedClientKey("1.2.3.4", "a")).to.not.equal(
+      hashedClientKey("1.2.3.4", "b"),
+    );
+    expect(hashedClientKey("1.2.3.4", "a")).to.not.include("1.2.3.4");
   });
 });

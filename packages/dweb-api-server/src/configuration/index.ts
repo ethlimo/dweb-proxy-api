@@ -127,6 +127,7 @@ const configuration = {
     limit: Number(process.env.CLIENT_RATE_LIMIT ?? 0),
     period: parsePositiveInt(process.env.CLIENT_RATE_PERIOD, 60), // seconds
     trust_proxy: process.env.TRUST_PROXY ?? "",
+    secret: process.env.CLIENT_RATE_LIMIT_SECRET ?? "",
   },
   //dns-query isolated endpoint (DOH)
   dnsquery: {
@@ -372,6 +373,7 @@ export const configurationToIClientRateLimitConfig = (config: {
     limit: number;
     period: number;
     trust_proxy: string;
+    secret: string;
   };
 }): IClientRateLimitConfig => {
   return {
@@ -379,6 +381,7 @@ export const configurationToIClientRateLimitConfig = (config: {
       getLimit: () => config.client_rate_limit.limit,
       getPeriod: () => config.client_rate_limit.period,
       getTrustProxy: () => config.client_rate_limit.trust_proxy,
+      getSecret: () => config.client_rate_limit.secret,
     }),
   };
 };

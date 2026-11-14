@@ -3,6 +3,7 @@ import type { IClientRateLimitConfig } from "dweb-api-types/config";
 import type { ILoggerService } from "dweb-api-types/logger";
 import type { IDomainRateLimitService } from "../services/DomainRateLimit/index.js";
 import { isIP } from "node:net";
+import { createHmac, randomBytes } from "node:crypto";
 import { getTraceIdFromRequest } from "../utils/index.js";
 
 // TRUST_PROXY is passed to express as "trust proxy". Without it req.ip is
@@ -62,6 +63,21 @@ export function clientKey(ip: string): string {
   return `${ipv6Groups(ip).slice(0, 4).join(":")}::/64`;
 }
 
+// The gateway doesn't keep client addresses anywhere, so the counter is
+// stored under a keyed hash of the address instead of the address itself.
+// That way redis, and the rate limit service's debug log of the key, only
+// ever see the hash. Without CLIENT_RATE_LIMIT_SECRET each process uses its
+// own random key, which is fine with a single worker; several workers or
+// instances need the same secret to share one counter per client.
+const processSecret = randomBytes(32);
+
+export function hashedClientKey(ip: string, secret?: string): string {
+  return createHmac("sha256", secret || processSecret)
+    .update(clientKey(ip))
+    .digest("hex")
+    .slice(0, 32);
+}
+
 export function clientRateLimit(
   config: IClientRateLimitConfig,
   rateLimitService: IDomainRateLimitService,
@@ -80,7 +96,7 @@ export function clientRateLimit(
     try {
       const result = await rateLimitService.incrementRateLimit(
         request,
-        `client/${clientKey(ip)}`,
+        `client/${hashedClientKey(ip, settings.getSecret?.())}`,
         limit,
         settings.getPeriod(),
       );
@@ -88,7 +104,7 @@ export function clientRateLimit(
         logger.info("client rate limited", {
           ...request,
           origin: "clientRateLimit",
-          context: { ip, count: result.count },
+          context: { count: result.count },
         });
         res.writeHead(429, { "Retry-After": String(Math.max(result.ttl, 1)) });
         res.end();
@@ -99,7 +115,7 @@ export function clientRateLimit(
       logger.error("client rate limit check failed, letting request through", {
         ...request,
         origin: "clientRateLimit",
-        context: { ip, error: e },
+        context: { error: e },
       });
     }
     next();

@@ -111,6 +111,8 @@ export interface IClientRateLimitConfig {
     getPeriod: () => number;
     // value for express "trust proxy", empty string leaves it unset
     getTrustProxy: () => string;
+    // key for hashing client addresses, empty means random per process
+    getSecret?: () => string;
   };
 }
 
