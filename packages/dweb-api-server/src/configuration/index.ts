@@ -174,6 +174,7 @@ const configuration = {
       process.env.CLUSTER_CATASTROPHIC_WINDOW_MS,
       30000,
     ),
+    metricsPort: parsePositiveInt(process.env.METRICS_LISTEN_PORT, 0),
   },
 };
 configuration.ask.rate.enabled = configuration.ask.rate.limit > 0;
@@ -701,6 +702,7 @@ export const configurationToIClusterConfig = (config: {
     noHeartbeatMs: number;
     catastrophicRestarts: number;
     catastrophicWindowMs: number;
+    metricsPort: number;
   };
 }): IClusterConfig => {
   return {
@@ -712,6 +714,7 @@ export const configurationToIClusterConfig = (config: {
       getNoHeartbeatMs: () => config.cluster.noHeartbeatMs,
       getCatastrophicRestarts: () => config.cluster.catastrophicRestarts,
       getCatastrophicWindowMs: () => config.cluster.catastrophicWindowMs,
+      getMetricsPort: () => config.cluster.metricsPort,
     }),
   };
 };
