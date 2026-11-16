@@ -60,6 +60,40 @@ __Gateway request flow__
 | `DATAURL_ENABLED` | `"false"` | Enable [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) with [ENSIP-TBD](https://github.com/nxt3d/ENSIP-ideas/blob/main/ENSIPS/ensip-TBD-2.md) [hook](https://github.com/ethlimo/ens-hooks) support |
 | `DATAURL_PORT` | `12500` | TCP port to bind on |
 | `DATAURL_ENDPOINT` | (unset) | URL of the [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) hook execution endpoint. Required if `DATAURL_ENABLED=true`. |
+| `METRICS_LISTEN_PORT` | (unset) | Port for a Prometheus `/metrics` endpoint. Disabled when unset. See [Metrics](#metrics). |
+
+## Metrics
+
+With `METRICS_LISTEN_PORT` set, the service exposes Prometheus metrics on `http://<host>:<port>/metrics`. In cluster mode the endpoint runs in the primary process and merges the metrics of all workers. Don't expose this port publicly.
+
+Besides the default Node.js process metrics (CPU, memory, event loop lag, ...) it exports:
+
+- `dweb_http_requests_total{port, status}`: requests per listener port and status code
+- `dweb_http_request_duration_seconds{port}`: request duration histogram
+- `dweb_http_requests_inflight`: requests currently in progress
+
+A few alert rules that are a reasonable starting point (adjust the ports and thresholds to your setup):
+
+```yaml
+groups:
+  - name: dweb-proxy-api
+    rules:
+      - alert: DwebHighRequestRate
+        expr: sum by (port) (rate(dweb_http_requests_total[5m])) > 500
+        for: 10m
+      - alert: DwebHighErrorRate
+        expr: sum(rate(dweb_http_requests_total{status=~"5.."}[5m])) / sum(rate(dweb_http_requests_total[5m])) > 0.05
+        for: 10m
+      - alert: DwebRateLimited
+        expr: sum(rate(dweb_http_requests_total{status="429"}[5m])) > 1
+        for: 5m
+      - alert: DwebSlowRequests
+        expr: histogram_quantile(0.99, sum by (le) (rate(dweb_http_request_duration_seconds_bucket[5m]))) > 5
+        for: 10m
+      - alert: DwebEventLoopLag
+        expr: max(nodejs_eventloop_lag_p99_seconds) > 0.5
+        for: 5m
+```
 
 ## Quickstart
 
