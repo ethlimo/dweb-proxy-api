@@ -5,6 +5,12 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import type { Server as NodeHttpServer } from "node:http";
 import type { ILoggerService } from "dweb-api-types/logger";
 import { withProcessLogger } from "./clusterLogger.js";
+import {
+  instrumentServer,
+  startClusterMetricsServer,
+  startDefaultMetrics,
+  startLocalMetricsServer,
+} from "./metrics.js";
 
 type StartFn = (
   registerServer: (server: NodeHttpServer) => void,
@@ -22,10 +28,14 @@ type ClusterOptions = {
   keepAliveTimeoutMs?: number;
   catastrophicRestarts?: number;
   catastrophicWindowMs?: number;
+  // port for the prometheus /metrics endpoint, 0 or unset disables it
+  metricsPort?: number;
   logger?: ILoggerService;
 };
 
-type ClusterNumericOptions = Required<Omit<ClusterOptions, "logger">>;
+type ClusterNumericOptions = Required<
+  Omit<ClusterOptions, "logger" | "metricsPort">
+>;
 
 const DEFAULTS: ClusterNumericOptions = {
   workers: Math.max(2, availableParallelism()),
@@ -67,8 +77,20 @@ export function runClustered(
   start: StartFn,
   opts: ClusterOptions = {},
 ): () => void {
-  const { logger, ...numericOpts } = opts;
+  const { logger, metricsPort = 0, ...numericOpts } = opts;
   const raw = { ...DEFAULTS, ...numericOpts };
+  const metricsEnabled = metricsPort > 0;
+  const onMetricsError = (err: Error) => {
+    logger?.error("Metrics server error, metrics are not served", {
+      origin: "cluster.ts",
+      trace_id: "UNDEFINED_TRACE_ID",
+      context: {
+        errorMessage: err.message,
+        errorCode: (err as any)?.code,
+        metricsPort,
+      },
+    });
+  };
 
   // Validate and clamp all numeric options. For every option except
   // `workers`, invalid values (NaN, non-finite, or below the minimum)
@@ -106,7 +128,14 @@ export function runClustered(
   // process, run start() directly in the current process.
   if (!cluster.isPrimary || workerCount <= 1) {
     const cleanups: Array<() => void> = [];
-    void runWorker(start, o, logger, cleanups);
+    if (cluster.isPrimary && metricsEnabled) {
+      const metricsServer = startLocalMetricsServer(
+        metricsPort,
+        onMetricsError,
+      );
+      cleanups.push(() => metricsServer.close());
+    }
+    void runWorker(start, o, metricsEnabled, logger, cleanups);
     // runWorker populates `cleanups` asynchronously (after its first await).
     // Callers must flush pending microtasks (e.g. via setImmediate) before
     // invoking this handle to guarantee all teardown callbacks are registered.
@@ -118,6 +147,10 @@ export function runClustered(
 
   // Primary process: fork `workerCount` workers and supervise them.
   cluster.schedulingPolicy = cluster.SCHED_RR;
+
+  const metricsServer = metricsEnabled
+    ? startClusterMetricsServer(metricsPort, onMetricsError)
+    : null;
 
   const lastHeartbeat = new Map<number, number>();
   const restartTimestamps: number[] = [];
@@ -207,6 +240,7 @@ export function runClustered(
     // without sending signals to workers or calling process.exit().
     // In production, use shutdownPrimary() (triggered via SIGTERM/SIGINT).
     clearInterval(watchdog);
+    metricsServer?.close();
     cluster.removeListener("exit", onClusterExit);
     process.removeListener("SIGTERM", shutdownPrimary);
     process.removeListener("SIGINT", shutdownPrimary);
@@ -216,6 +250,7 @@ export function runClustered(
 async function runWorker(
   start: StartFn,
   o: ClusterNumericOptions,
+  metricsEnabled: boolean,
   logger?: ILoggerService,
   cleanups?: Array<() => void>,
 ): Promise<void> {
@@ -228,8 +263,16 @@ async function runWorker(
   let sockets = 0;
   let overloadedSince = 0;
 
+  // nothing reads the metrics when the endpoint is off, so don't collect them
+  if (metricsEnabled) {
+    startDefaultMetrics();
+  }
+
   const registerServer = (server: NodeHttpServer) => {
     servers.add(server);
+    if (metricsEnabled) {
+      instrumentServer(server);
+    }
 
     server.requestTimeout = o.requestTimeoutMs;
     server.headersTimeout = o.headersTimeoutMs;

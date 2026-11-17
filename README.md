@@ -35,7 +35,10 @@ __Gateway request flow__
 | `ASK_LISTEN_PORT` | `"9090"`      |    Ask listener port. |certificate issuance requests from Caddy server: `:9090/ask?domain=${name}.eth`. |
 | `ASK_NAME_RATE_LIMIT` | `100` | Certificate requests per `ASK_RATE_PERIOD` for all hostnames below one registered name together (`name.eth`, `name.gno`, `name.base.eth`), on top of the limit per hostname. Only applies while the ask rate limit is on (`ASK_RATE_LIMIT` > 0). `0` turns it off. |
 | `ETH_RPC_ENDPOINT` | `"http://192.168.1.7:8845"` | Primary RPC provider FQDN for ENS resolution. |
-| `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | Secondary failover RPC provider FQDN. |
+| `ETH_RPC_ENDPOINT_FAILOVER_PRIMARY` | `null` | First failover RPC provider FQDN. |
+| `ETH_RPC_ENDPOINT_FAILOVER_SECONDARY` | `null` | Second failover RPC provider FQDN. |
+| `ETH_PROVIDER_QUORUM` | `1` | How many of the configured Ethereum RPC providers have to return the same result. With `1` the answer of a single provider is trusted, so a compromised or misbehaving RPC can return any contenthash. Setting it to `2` with two providers makes lookups fail when they disagree, and `2` with three providers uses the majority. It can't be higher than the number of providers, the service won't start in that case. Use providers run by different operators for this to mean anything. |
+| `ETH_CHAIN_ID` | `1` | Chain id the Ethereum RPC providers are expected to serve. |
 | `GNO_RPC_ENDPOINT` |  `https://rpc.gnosischain.com` | Primary RPC endpoint for Gnosis. |
 | `BASE_RPC_ENDPOINT` | `https://mainnet.base.org` | Primary RPC endpoint for Base L2 (Basenames `*.base.eth` resolution). |
 | `BASE_L2_BYPASS_ENABLED` | `"true"` | Resolve `*.base.eth` contenthash records directly against the Basenames registry on Base L2, bypassing the Coinbase CCIP gateway (which does not serve contenthash records). Set to `false` to fall back to standard L1 ENS resolution. |
@@ -61,6 +64,40 @@ __Gateway request flow__
 | `DATAURL_ENABLED` | `"false"` | Enable [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) with [ENSIP-TBD](https://github.com/nxt3d/ENSIP-ideas/blob/main/ENSIPS/ensip-TBD-2.md) [hook](https://github.com/ethlimo/ens-hooks) support |
 | `DATAURL_PORT` | `12500` | TCP port to bind on |
 | `DATAURL_ENDPOINT` | (unset) | URL of the [EIP-8121](https://eips.ethereum.org/EIPS/eip-8121) hook execution endpoint. Required if `DATAURL_ENABLED=true`. |
+| `METRICS_LISTEN_PORT` | (unset) | Port for a Prometheus `/metrics` endpoint. Disabled when unset. See [Metrics](#metrics). |
+
+## Metrics
+
+With `METRICS_LISTEN_PORT` set, the service exposes Prometheus metrics on `http://<host>:<port>/metrics`. In cluster mode the endpoint runs in the primary process and merges the metrics of all workers. Don't expose this port publicly.
+
+Besides the default Node.js process metrics (CPU, memory, event loop lag, ...) it exports:
+
+- `dweb_http_requests_total{port, status}`: requests per listener port and status code
+- `dweb_http_request_duration_seconds{port}`: request duration histogram
+- `dweb_http_requests_inflight`: requests currently in progress
+
+A few alert rules that are a reasonable starting point (adjust the ports and thresholds to your setup):
+
+```yaml
+groups:
+  - name: dweb-proxy-api
+    rules:
+      - alert: DwebHighRequestRate
+        expr: sum by (port) (rate(dweb_http_requests_total[5m])) > 500
+        for: 10m
+      - alert: DwebHighErrorRate
+        expr: sum(rate(dweb_http_requests_total{status=~"5.."}[5m])) / sum(rate(dweb_http_requests_total[5m])) > 0.05
+        for: 10m
+      - alert: DwebRateLimited
+        expr: sum(rate(dweb_http_requests_total{status="429"}[5m])) > 1
+        for: 5m
+      - alert: DwebSlowRequests
+        expr: histogram_quantile(0.99, sum by (le) (rate(dweb_http_request_duration_seconds_bucket[5m]))) > 5
+        for: 10m
+      - alert: DwebEventLoopLag
+        expr: max(nodejs_eventloop_lag_p99_seconds) > 0.5
+        for: 5m
+```
 
 ## Quickstart
 
