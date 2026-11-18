@@ -4,6 +4,12 @@ import type { IRequestContext } from "dweb-api-types/request-context";
 import { normalizeUrlFragmentForIpfsSubdomainGateway } from "dweb-api-resolver/resolver/utils";
 import type { IConfigurationKubo } from "dweb-api-types/config";
 
+// The kubo url can carry basic auth credentials (https://user:pass@host/),
+// so it's only ever logged without them.
+function withoutCredentials(url: URL): string {
+  return `${url.protocol}//${url.host}${url.pathname}`;
+}
+
 export class KuboApiService {
   private loggerService: ILoggerService;
   private configurationService: IConfigurationKubo;
@@ -22,7 +28,7 @@ export class KuboApiService {
       trace_id: "UNKNOWN_TRACE_ID",
       origin: "KuboApiService",
       context: {
-        url: koboUrl,
+        url: koboUrl ? withoutCredentials(koboUrl) : null,
       },
     };
     if (!koboUrl) {
@@ -80,12 +86,15 @@ export class KuboApiService {
         .ok(() => true);
 
       if (response.error) {
+        // Not the whole response: it holds the request, Authorization
+        // header included.
         this.loggerService.debug("Failed to resolve IPNS name", {
           ...request,
           origin: "KuboApiService",
           context: {
             name,
-            response: response,
+            status: response.status,
+            message: response.body?.Message ?? response.text,
           },
         });
         return null;
