@@ -963,6 +963,79 @@ describe("Proxy API Integration Tests", function () {
     expect(content_path).to.be.equal("/");
     expect(content_storage_type).to.be.equal("adnl");
   });
+
+  const ipfsCid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
+  const ipfsTestCase = (subdomainSupport: boolean) => ({
+    name: "ipfsport.eth",
+    type: "ipfs",
+    contentHash: `ipfs://${ipfsCid}`,
+    additionalInfo: {},
+    options: populateDefaultOptions({ subdomainSupport }),
+  });
+
+  it("should preserve explicit default port 443 in X-Content-Location for an IPFS path gateway", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ipfs.backend = "https://ipfs.example:443";
+    });
+    const { content_location, content_path, res } = await commonSetup(
+      ipfsTestCase(false),
+    );
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal("ipfs.example:443");
+    expect(content_path).to.be.equal(`/ipfs/${ipfsCid}/`);
+  });
+
+  it("should preserve explicit default port 443 in X-Content-Location for an IPFS subdomain gateway", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ipfs.backend = "https://ipfs.example:443";
+    });
+    const { content_location, content_path, res } = await commonSetup(
+      ipfsTestCase(true),
+    );
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(`${ipfsCid}.ipfs.ipfs.example:443`);
+    expect(content_path).to.be.equal("/");
+  });
+
+  it("should preserve a non-default port for an IPFS subdomain gateway", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ipfs.backend = "http://ipfs.example:8080";
+    });
+    const { content_location, res } = await commonSetup(ipfsTestCase(true));
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal(`${ipfsCid}.ipfs.ipfs.example:8080`);
+  });
+
+  it("should not append a port for IPFS when IPFS_TARGET has no explicit port", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ipfs.backend = "https://ipfs.example";
+    });
+    const { content_location, res } = await commonSetup(ipfsTestCase(false));
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal("ipfs.example");
+  });
+
+  it("should preserve explicit default port 443 for the ENS socials endpoint", async () => {
+    harnessInput.configurationService.set((conf) => {
+      conf.ens.socialsEndpoint = (ens: string) =>
+        `https://socials.example:443/?name=${ens}`;
+    });
+    const { content_location, content_path, res } = await commonSetup({
+      name: "nocontenthash.eth",
+      type: "none",
+      contentHash: null,
+      additionalInfo: {},
+      options: populateDefaultOptions({ ensSocialsRedirect: true }),
+    });
+
+    expect(res.statusCode).to.be.equal(200);
+    expect(content_location).to.be.equal("socials.example:443");
+    expect(content_path).to.be.equal("/?name=nocontenthash.eth/");
+  });
 });
 
 describe("Caddy API Integration Tests", function () {
