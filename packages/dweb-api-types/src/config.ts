@@ -100,6 +100,9 @@ export interface IAskEndpointConfig {
     getRateEnabled: () => boolean;
     getRateLimit: () => number;
     getRatePeriod: () => number;
+    // certificate requests per period for all hostnames below one registered
+    // name (see AskRateLimiter), 0 turns this limit off
+    getRegisteredNameRateLimit?: () => number;
   };
 }
 
