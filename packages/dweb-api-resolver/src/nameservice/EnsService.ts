@@ -3,6 +3,10 @@ import {
   FetchRequest,
   JsonRpcProvider,
   AbstractProvider,
+  Contract,
+  EnsResolver,
+  dnsEncode,
+  isError,
 } from "ethers";
 import { ILoggerService } from "dweb-api-types/logger";
 import { IRequestContext } from "dweb-api-types/request-context";
@@ -27,13 +31,52 @@ import { RecordEntryDecodedEIP8121Hook } from "dweb-api-types/ens-resolver";
 // Side-effect import: patches ethers v6 to add ENSv2 support.
 import "@ensdomains/ethers-patch-v6";
 
+// The Universal Resolver the ENSv2 patch uses for provider.getResolver().
+const UNIVERSAL_RESOLVER = "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe";
+const universalResolverAbi = [
+  "function requireResolver(bytes) view returns ((bytes name, uint256 offset, bytes32 node, address resolver, bool extended))",
+  "error ResolverNotFound(bytes name)",
+  "error ResolverNotContract(bytes name, address resolver)",
+];
+
+// Same lookup as provider.getResolver() with the ENSv2 patch, but only a
+// "not found" from the Universal Resolver means no resolver. RPC errors are
+// thrown like everywhere else instead of turning into null.
+const findResolver = async (
+  provider: AbstractProvider,
+  name: string,
+): Promise<EnsResolver | null> => {
+  const universalResolver = new Contract(
+    UNIVERSAL_RESOLVER,
+    universalResolverAbi,
+    provider,
+  );
+  let info;
+  try {
+    info = await universalResolver.requireResolver(dnsEncode(name, 255));
+  } catch (e) {
+    if (
+      isError(e, "CALL_EXCEPTION") &&
+      (e.revert?.name === "ResolverNotFound" ||
+        e.revert?.name === "ResolverNotContract")
+    ) {
+      return null;
+    }
+    throw e;
+  }
+  const resolver = new EnsResolver(provider, info.resolver, name);
+  const extended = Boolean(info.extended);
+  resolver.supportsWildcard = async () => extended;
+  return resolver;
+};
+
 const getEnsContentHash = async (
   request: IRequestContext,
   provider: AbstractProvider,
   logger: ILoggerService,
   name: string,
 ): Promise<DecodedCodecString | DecodedDataUri | DecodedDataUrl | null> => {
-  const res = await provider.getResolver(name);
+  const res = await findResolver(provider, name);
   if (!res) {
     logger.debug("no resolver", {
       ...request,
