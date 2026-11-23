@@ -6,6 +6,15 @@
 	# X-Content-Location: the base FQDN of the gateway to use (with port)
 	# X-Content-Path: the path prefix to use when rewriting the request URI
 	# {$DWEB_API_URL} is set in the docker-compose.yml environment variables.
+
+	# The gateway path is X-Content-Path followed by the request uri, and the
+	# rewrite below decodes it, so an encoded slash turns ..%2F into a real
+	# ../ segment. Depending on the Caddy version and the gateway that segment
+	# gets resolved, and the path ends up outside X-Content-Path. A request
+	# path has no reason to contain .. segments once decoded, reject those.
+	@dot_segments vars_regexp {http.request.uri.path} (^|/)\.\.(/|$)
+	respond @dot_segments 400
+
 	reverse_proxy {$DWEB_API_URL} {
 		transport http {
 			dial_timeout 30s

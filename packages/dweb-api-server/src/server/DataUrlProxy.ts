@@ -21,6 +21,30 @@ function formatBytesToKiB(bytes: number): string {
   return kib.toFixed(2) + " KiB";
 }
 
+// Splits a data url (RFC 2397) into media type and content. The media type
+// can't contain a comma, so everything after the first one is content, commas
+// and line breaks included.
+function parseDataUrl(
+  dataUrl: string,
+): { mimeType: string; isBase64: boolean; body: string } | null {
+  const comma = dataUrl.indexOf(",");
+  if (!dataUrl.startsWith("data:") || comma === -1) {
+    return null;
+  }
+  let mimeType = dataUrl.slice("data:".length, comma);
+  const isBase64 = mimeType.toLowerCase().endsWith(";base64");
+  if (isBase64) {
+    mimeType = mimeType.slice(0, -";base64".length);
+  }
+  // no type given means text/plain, a bare ";charset=..." keeps the charset
+  if (mimeType === "") {
+    mimeType = "text/plain;charset=US-ASCII";
+  } else if (mimeType.startsWith(";")) {
+    mimeType = "text/plain" + mimeType;
+  }
+  return { mimeType, isBase64, body: dataUrl.slice(comma + 1) };
+}
+
 export class DataUrlProxy extends SharedServer {
   async queryDataUrl(request: IRequestContext, ensname: string) {
     this._logger.debug(`Querying data URL`, {
@@ -132,15 +156,13 @@ export class DataUrlProxy extends SharedServer {
           );
           return;
         }
-        const matches = data.match(/^data:([^;]+)(;base64)?,(.*)$/);
-        if (!matches) {
+        const parsed = parseDataUrl(data);
+        if (!parsed) {
           errorBuilder(res, 400, "Invalid data URL");
           return;
         }
 
-        const mimeType = matches[1];
-        const isBase64 = !!matches[2];
-        const dataBody = matches[3];
+        const { mimeType, isBase64, body: dataBody } = parsed;
 
         const buffer = isBase64
           ? Buffer.from(dataBody, "base64")
