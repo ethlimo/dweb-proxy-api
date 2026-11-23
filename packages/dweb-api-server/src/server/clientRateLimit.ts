@@ -6,11 +6,9 @@ import { isIP } from "node:net";
 import { createHmac, randomBytes } from "node:crypto";
 import { getTraceIdFromRequest } from "../utils/index.js";
 
-// TRUST_PROXY is passed to express as "trust proxy". Without it req.ip is
-// the address of whatever connects to us, which behind Caddy is Caddy
-// itself, so every client would share one counter.
-// Accepts "true", a hop count, or a comma separated list of addresses /
-// subnets / express presets like "loopback".
+// without this, behind caddy req.ip is caddy's own address and every client
+// shares one counter. value: "true", hop count, or comma separated
+// addresses/subnets/"loopback"
 export function applyTrustProxy(app: Express, value: string) {
   const trimmed = value.trim();
   if (!trimmed || trimmed === "false") {
@@ -28,10 +26,10 @@ export function applyTrustProxy(app: Express, value: string) {
   }
 }
 
-// Expands an IPv6 address into its 8 groups, without leading zeros.
+// "2001:db8::1" -> ["2001", "db8", "0", "0", "0", "0", "0", "1"]
 function ipv6Groups(ip: string): string[] {
   let address = ip.split("%")[0].toLowerCase();
-  // an embedded ipv4 tail (::ffff:1.2.3.4, 64:ff9b::1.2.3.4) is two groups
+  // ::ffff:1.2.3.4 and 64:ff9b::1.2.3.4 end in an ipv4, that's two groups
   const v4 = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(address);
   if (v4) {
     const [a, b, c, d] = v4.slice(1).map(Number);
@@ -49,9 +47,8 @@ function ipv6Groups(ip: string): string[] {
   return [...front, ...zeros, ...back].map((g) => parseInt(g, 16).toString(16));
 }
 
-// Key the counter is stored under. IPv6 clients usually get a whole /64,
-// so they are counted per /64, otherwise anyone could just rotate through
-// their addresses to get around the limit.
+// ipv6 clients usually have a whole /64 and could just rotate addresses,
+// so they're counted per /64
 export function clientKey(ip: string): string {
   const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
   if (mapped) {
@@ -63,12 +60,9 @@ export function clientKey(ip: string): string {
   return `${ipv6Groups(ip).slice(0, 4).join(":")}::/64`;
 }
 
-// The gateway doesn't keep client addresses anywhere, so the counter is
-// stored under a keyed hash of the address instead of the address itself.
-// That way redis, and the rate limit service's debug log of the key, only
-// ever see the hash. Without CLIENT_RATE_LIMIT_SECRET each process uses its
-// own random key, which is fine with a single worker; several workers or
-// instances need the same secret to share one counter per client.
+// we don't store client ips, so redis (and the debug log of the key) only
+// sees an hmac of it. no CLIENT_RATE_LIMIT_SECRET = random key per process,
+// ok for one worker, but several workers need the same secret to share counters
 const processSecret = randomBytes(32);
 
 export function hashedClientKey(ip: string, secret?: string): string {
@@ -96,7 +90,7 @@ export function clientRateLimit(
     try {
       const result = await rateLimitService.incrementRateLimit(
         request,
-        `client/${hashedClientKey(ip, settings.getSecret?.())}`,
+        `client/${hashedClientKey(ip, settings.getSecret())}`,
         limit,
         settings.getPeriod(),
       );
@@ -111,7 +105,7 @@ export function clientRateLimit(
         return;
       }
     } catch (e) {
-      // if redis is down we'd rather serve requests than reject all of them
+      // redis down -> let traffic through instead of 429ing everyone
       logger.error("client rate limit check failed, letting request through", {
         ...request,
         origin: "clientRateLimit",

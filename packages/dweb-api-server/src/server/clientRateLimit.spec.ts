@@ -18,6 +18,7 @@ const config = (limit: number) => ({
     getLimit: () => limit,
     getPeriod: () => 60,
     getTrustProxy: () => "",
+    getSecret: () => "",
   }),
 });
 
