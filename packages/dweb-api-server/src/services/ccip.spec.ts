@@ -8,6 +8,7 @@ import {
   defaultCcipFetchOptions,
   isAllowedCcipUrl,
   isPublicAddress,
+  MAX_CCIP_URLS,
   publicOnlyLookup,
   restrictCcipRead,
   restrictFallbackProviderCcipRead,
@@ -210,6 +211,70 @@ describe("CCIP-read gateway requests", () => {
     } finally {
       drip.close();
       good.close();
+    }
+  });
+
+  it("doesn't wait for Retry-After on a 429", async () => {
+    let hits = 0;
+    const busy = await gateway((_req, res) => {
+      hits++;
+      res.writeHead(429, { "retry-after": "60000" });
+      res.end();
+    });
+    try {
+      const provider = new JsonRpcProvider("http://127.0.0.1:1", 1, {
+        staticNetwork: true,
+      });
+      restrictCcipRead(provider, logger, testOptions(300));
+      const started = Date.now();
+      let error: any = null;
+      try {
+        await (provider.ccipReadFetch as any)(
+          { to: "0x0000000000000000000000000000000000000001" },
+          "0xabcd",
+          [`${busy.url}/{sender}/{data}`],
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(error?.code).to.equal("OFFCHAIN_FAULT");
+      expect(hits).to.equal(1);
+      expect(Date.now() - started).to.be.lessThan(1500);
+    } finally {
+      busy.close();
+    }
+  });
+
+  it(`tries at most ${MAX_CCIP_URLS} gateway urls`, async () => {
+    let hits = 0;
+    const failing = await gateway((_req, res) => {
+      hits++;
+      res.writeHead(500);
+      res.end();
+    });
+    try {
+      const provider = new JsonRpcProvider("http://127.0.0.1:1", 1, {
+        staticNetwork: true,
+      });
+      restrictCcipRead(provider, logger, testOptions(300));
+      const urls = Array.from(
+        { length: MAX_CCIP_URLS + 3 },
+        (_, i) => `${failing.url}/${i}/{sender}/{data}`,
+      );
+      let error: any = null;
+      try {
+        await (provider.ccipReadFetch as any)(
+          { to: "0x0000000000000000000000000000000000000001" },
+          "0xabcd",
+          urls,
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(error?.code).to.equal("OFFCHAIN_FAULT");
+      expect(hits).to.equal(MAX_CCIP_URLS);
+    } finally {
+      failing.close();
     }
   });
 });

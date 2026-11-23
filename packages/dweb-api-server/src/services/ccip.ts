@@ -162,6 +162,9 @@ export type CcipFetchOptions = {
 // a gateway that needs more hops than this is broken anyway
 const MAX_CCIP_REDIRECTS = 5;
 
+// gateway urls tried per OffchainLookup, each one can take the full timeout
+export const MAX_CCIP_URLS = 5;
+
 export const defaultCcipFetchOptions: CcipFetchOptions = {
   timeoutMs: 10_000,
   maxResponseBytes: 1024 * 1024,
@@ -327,7 +330,7 @@ export function restrictCcipRead(
     const data = calldata.toLowerCase();
     const errorMessages: string[] = [];
 
-    for (const url of urls) {
+    for (const url of urls.slice(0, MAX_CCIP_URLS)) {
       if (!isAllowedCcipUrl(url, options)) {
         logger.info("ignoring CCIP-read url that is not public https", {
           trace_id: "UNDEFINED_TRACE_ID",
@@ -342,6 +345,8 @@ export function restrictCcipRead(
       request.getUrlFunc = getUrl;
       request.timeout = options.timeoutMs;
       request.allowGzip = false;
+      // no automatic retry on 429, it's handled like any other 4xx below
+      request.retryFunc = async () => false;
       if (url.indexOf("{data}") === -1) {
         request.body = { data, sender };
       }
